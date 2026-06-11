@@ -3,7 +3,11 @@ services:
   # Amazon Orders Sync Service
   #######################################
   amazon-orders:
-    build: .
+    build:
+      context: .
+      args:
+        APP_UID: "${APP_UID:-99}"
+        APP_GID: "${APP_GID:-100}"
     restart: unless-stopped
     container_name: amazon_orders_sync
     ports:
