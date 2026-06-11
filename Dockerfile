@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 
 # Build args for user/group IDs (defaults: 99/100)
-ARG APP_UID=99
-ARG APP_GID=100
+ARG APP_UID=1000
+ARG APP_GID=1000
 
 # Install Node.js (LTS) and npm alongside system libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \

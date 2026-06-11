@@ -6,8 +6,8 @@ services:
     build:
       context: .
       args:
-        APP_UID: "${APP_UID:-99}"
-        APP_GID: "${APP_GID:-100}"
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
     restart: unless-stopped
     container_name: amazon_orders_sync
     ports:
