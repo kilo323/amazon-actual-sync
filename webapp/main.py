@@ -33,8 +33,37 @@ async def lifespan(app: FastAPI):
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
 
+    def _dir_writable(path: Path) -> tuple[bool, str]:
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".write_probe"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return True, "ok"
+        except Exception as exc:
+            return False, f"{type(exc).__name__}: {exc}"
+
     config = AppConfig.load()
-    Path(config.db_path).parent.mkdir(parents=True, exist_ok=True)
+    db_dir = Path(config.db_path).parent
+    data_dir = Path(DATA_DIR)
+    uid = os.getuid() if hasattr(os, "getuid") else -1
+    gid = os.getgid() if hasattr(os, "getgid") else -1
+
+    data_dir_ok, data_dir_detail = _dir_writable(data_dir)
+    db_dir_ok, db_dir_detail = _dir_writable(db_dir)
+    logger.info(
+        "Startup filesystem check: uid=%s gid=%s data_dir=%s writable=%s (%s) db_dir=%s writable=%s (%s) db_path=%s",
+        uid,
+        gid,
+        data_dir,
+        data_dir_ok,
+        data_dir_detail,
+        db_dir,
+        db_dir_ok,
+        db_dir_detail,
+        config.db_path,
+    )
+
     db = Database(config.db_path)
 
     app.state.db = db

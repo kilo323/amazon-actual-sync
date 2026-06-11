@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 
 # Build args for user/group IDs (defaults: 99/100)
-ARG APP_UID=1000
-ARG APP_GID=1000
+ARG APP_UID=99
+ARG APP_GID=100
 
 # Install Node.js (LTS) and npm alongside system libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -16,10 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and the data directory
-RUN groupadd -g ${APP_GID} appgroup \
-    && useradd -m -u ${APP_UID} -g ${APP_GID} appuser \
-    && mkdir -p /data \
-    && chown ${APP_UID}:${APP_GID} /data
+RUN set -eux; \
+    if ! getent group "${APP_GID}" >/dev/null; then groupadd -g "${APP_GID}" appgroup; fi; \
+    if ! id -u appuser >/dev/null 2>&1; then useradd -o -m -u "${APP_UID}" -g "${APP_GID}" appuser; fi; \
+    mkdir -p /data; \
+    chown ${APP_UID}:${APP_GID} /data
 
 WORKDIR /app
 
