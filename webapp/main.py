@@ -1,0 +1,532 @@
+import asyncio
+import logging
+import os
+from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from app.config import AppConfig, AccountConfig, ActualBudgetConfig, DATA_DIR
+from app.database import Database
+from app.sync import sync_all, sync_account, sync_all_filter, sync_actual_budget_only, authenticate_account
+from app import actual_budget as actual_budget_module
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI lifespan – scheduler + shared state
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    )
+
+    config = AppConfig.load()
+    Path(config.db_path).parent.mkdir(parents=True, exist_ok=True)
+    db = Database(config.db_path)
+
+    app.state.db = db
+    app.state.syncing = False
+    app.state.last_run: Optional[datetime] = None
+    app.state.auth_failed: set = set()  # usernames that failed login on last attempt
+
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    app.state.scheduler = scheduler
+
+    async def _run_full_sync() -> None:
+        if app.state.syncing:
+            logger.warning("Sync already running – skipping")
+            return
+        app.state.syncing = True
+        try:
+            cfg = AppConfig.load()
+            current_db = Database(cfg.db_path)
+            # Optimistically clear auth failures before attempting
+            for a in cfg.accounts:
+                app.state.auth_failed.discard(a.username)
+            await asyncio.to_thread(sync_all, cfg, current_db, app.state.auth_failed)
+            app.state.last_run = datetime.utcnow()
+        finally:
+            app.state.syncing = False
+
+    def _reschedule(cfg: AppConfig) -> None:
+        parts = cfg.sync_schedule.split()
+        if len(parts) != 5:
+            logger.error("Invalid sync_schedule %r – expected 5-field cron", cfg.sync_schedule)
+            return
+        minute, hour, day, month, dow = parts
+        trigger = CronTrigger(
+            minute=minute, hour=hour, day=day, month=month,
+            day_of_week=dow, timezone="UTC",
+        )
+        if scheduler.get_job("sync_orders"):
+            scheduler.reschedule_job("sync_orders", trigger=trigger)
+        else:
+            scheduler.add_job(_run_full_sync, trigger, id="sync_orders")
+
+    app.state.run_full_sync = _run_full_sync
+    app.state.reschedule = _reschedule
+
+    _reschedule(config)
+    scheduler.start()
+
+    yield
+
+    scheduler.shutdown(wait=False)
+
+
+# ---------------------------------------------------------------------------
+# App + static files
+# ---------------------------------------------------------------------------
+
+app = FastAPI(title="Amazon Orders Sync", lifespan=lifespan)
+
+_STATIC = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def serve_index():
+    return FileResponse(str(_STATIC / "index.html"))
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+class AccountIn(BaseModel):
+    username: str
+    password: str
+    otp_secret_key: Optional[str] = None
+    label: Optional[str] = None
+    domain: Optional[str] = None
+
+
+class AccountUpdate(BaseModel):
+    username: str
+    password: Optional[str] = None   # blank = keep existing
+    otp_secret_key: Optional[str] = None
+    clear_otp: bool = False
+    label: Optional[str] = None
+    domain: Optional[str] = None
+
+
+VALID_FILTERS = {"last30", "months-3"}
+
+
+def _validate_time_filter(value: str) -> str:
+    if value in VALID_FILTERS:
+        return value
+    if value.startswith("year-") and value[5:].isdigit() and len(value[5:]) == 4:
+        return value
+    raise HTTPException(400, f"Invalid time_filter '{value}'. Must be 'last30', 'months-3', or 'year-YYYY'.")
+
+
+class SyncFilterIn(BaseModel):
+    time_filter: str  # e.g. "last30", "months-3", "year-2024"
+
+
+class ActualBudgetIn(BaseModel):
+    budget_sync_id: str = ""
+    account_id: str = ""
+    dry_run: bool = True
+    server_url: str = "http://localhost:5006"
+    server_password: str = ""
+    actual_sync_start_date: Optional[str] = None
+    amazon_category_name: str = ""
+
+
+class SettingsIn(BaseModel):
+    sync_schedule: str
+    lookback_days: int
+    log_level: str
+    actual_budget: Optional[ActualBudgetIn] = None
+
+
+# ---------------------------------------------------------------------------
+# Status
+# ---------------------------------------------------------------------------
+
+@app.get("/api/status")
+async def get_status():
+    config = AppConfig.load()
+    db: Database = app.state.db
+    scheduler: AsyncIOScheduler = app.state.scheduler
+
+    job = scheduler.get_job("sync_orders")
+    next_run = job.next_run_time.isoformat() if (job and job.next_run_time) else None
+
+    accounts = []
+    for acct in config.accounts:
+        info = db.get_account_info(acct.username)
+        # A session is considered active when the account has ever synced
+        # successfully or been logged in. The TOTP secret drives login automatically.
+        has_session = bool(info and (info.get("authenticated_at") or info.get("last_synced_at")))
+        auth_failed = acct.username in app.state.auth_failed
+        needs_auth = not has_session or auth_failed
+        accounts.append({
+            "username": acct.username,
+            "label": acct.label,
+            "last_synced_at": info["last_synced_at"] if info else None,
+            "has_totp": bool(acct.otp_secret_key),
+            "authenticated": has_session,
+            "auth_failed": auth_failed,
+            "needs_auth": needs_auth,
+        })
+
+    return {
+        "syncing": app.state.syncing,
+        "last_run": app.state.last_run.isoformat() if app.state.last_run else None,
+        "next_run": next_run,
+        "accounts": accounts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
+
+@app.get("/api/settings")
+async def get_settings():
+    config = AppConfig.load()
+    ab = None
+    if config.actual_budget is not None:
+        ab = {
+            "budget_sync_id": config.actual_budget.budget_sync_id,
+            "account_id": config.actual_budget.account_id,
+            "dry_run": config.actual_budget.dry_run,
+            "server_url": config.actual_budget.server_url,
+            "server_password": config.actual_budget.server_password,
+            "actual_sync_start_date": config.actual_budget.actual_sync_start_date,
+            "amazon_category_name": config.actual_budget.amazon_category_name,
+        }
+    return {
+        "sync_schedule": config.sync_schedule,
+        "lookback_days": config.lookback_days,
+        "log_level": config.log_level,
+        "db_path": config.db_path,
+        "actual_budget": ab,
+    }
+
+
+@app.put("/api/settings")
+async def update_settings(body: SettingsIn):
+    config = AppConfig.load()
+    config.sync_schedule = body.sync_schedule
+    config.lookback_days = max(1, body.lookback_days)
+    config.log_level = body.log_level.upper()
+    if body.actual_budget is not None:
+        config.actual_budget = ActualBudgetConfig(
+            budget_sync_id=body.actual_budget.budget_sync_id,
+            account_id=body.actual_budget.account_id,
+            dry_run=body.actual_budget.dry_run,
+            server_url=body.actual_budget.server_url,
+            server_password=body.actual_budget.server_password,
+            actual_sync_start_date=body.actual_budget.actual_sync_start_date or None,
+            amazon_category_name=body.actual_budget.amazon_category_name,
+        )
+    else:
+        config.actual_budget = None
+    config.save()
+    app.state.reschedule(config)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Accounts CRUD
+# ---------------------------------------------------------------------------
+
+@app.get("/api/accounts")
+async def list_accounts():
+    config = AppConfig.load()
+    return [
+        {
+            "index": i,
+            "username": a.username,
+            "label": a.label,
+            "domain": a.domain,
+            "has_otp": bool(a.otp_secret_key),
+        }
+        for i, a in enumerate(config.accounts)
+    ]
+
+
+@app.post("/api/accounts", status_code=201)
+async def add_account(body: AccountIn):
+    config = AppConfig.load()
+    if any(a.username == body.username for a in config.accounts):
+        raise HTTPException(409, f"Account '{body.username}' already exists")
+    config.accounts.append(AccountConfig(
+        username=body.username,
+        password=body.password,
+        otp_secret_key=body.otp_secret_key or None,
+        label=body.label or None,
+        domain=body.domain or None,
+    ))
+    config.save()
+    return {"index": len(config.accounts) - 1}
+
+
+@app.put("/api/accounts/{idx}")
+async def update_account(idx: int, body: AccountUpdate):
+    config = AppConfig.load()
+    if idx < 0 or idx >= len(config.accounts):
+        raise HTTPException(404, "Account not found")
+    existing = config.accounts[idx]
+    config.accounts[idx] = AccountConfig(
+        username=body.username,
+        password=body.password if body.password else existing.password,
+        otp_secret_key=(
+            None if body.clear_otp
+            else (body.otp_secret_key if body.otp_secret_key else existing.otp_secret_key)
+        ),
+        label=body.label or None,
+        domain=body.domain or None,
+    )
+    config.save()
+    return {"ok": True}
+
+
+@app.delete("/api/accounts/{idx}")
+async def delete_account(idx: int):
+    config = AppConfig.load()
+    if idx < 0 or idx >= len(config.accounts):
+        raise HTTPException(404, "Account not found")
+    removed = config.accounts.pop(idx)
+    config.save()
+    # Remove persisted session file if present
+    db: Database = app.state.db
+    info = db.get_account_info(removed.username)
+    if info:
+        try:
+            os.remove(os.path.join(DATA_DIR, f".session-{info['id']}.json"))
+        except FileNotFoundError:
+            pass
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# TOTP code endpoint
+# ---------------------------------------------------------------------------
+
+@app.get("/api/accounts/{idx}/totp")
+async def get_totp_code(idx: int):
+    """Return the current TOTP code and remaining seconds for the active window."""
+    import time
+    try:
+        import pyotp
+    except ImportError:
+        raise HTTPException(500, "pyotp is not installed")
+
+    config = AppConfig.load()
+    if idx < 0 or idx >= len(config.accounts):
+        raise HTTPException(404, "Account not found")
+    account = config.accounts[idx]
+    if not account.otp_secret_key:
+        raise HTTPException(400, "No TOTP secret configured for this account")
+
+    totp = pyotp.TOTP(account.otp_secret_key.replace(" ", "").strip())
+    code = totp.now()
+    remaining = 30 - (int(time.time()) % 30)
+    return {"code": code, "remaining": remaining}
+
+
+# ---------------------------------------------------------------------------
+# Authenticate (login only, no order fetch)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/accounts/{idx}/authenticate")
+async def authenticate(idx: int):
+    if app.state.syncing:
+        raise HTTPException(409, "A sync is already in progress")
+    config = AppConfig.load()
+    if idx < 0 or idx >= len(config.accounts):
+        raise HTTPException(404, "Account not found")
+    account = config.accounts[idx]
+    db: Database = app.state.db
+
+    async def _run() -> None:
+        app.state.syncing = True
+        try:
+            await asyncio.to_thread(
+                authenticate_account, account, db, app.state.auth_failed
+            )
+        finally:
+            app.state.syncing = False
+
+    asyncio.create_task(_run())
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Sync triggers
+# ---------------------------------------------------------------------------
+
+@app.post("/api/sync")
+async def trigger_full_sync():
+    if app.state.syncing:
+        raise HTTPException(409, "A sync is already in progress")
+    asyncio.create_task(app.state.run_full_sync())
+    return {"ok": True}
+
+
+@app.post("/api/sync/filter")
+async def trigger_filter_sync(body: SyncFilterIn):
+    if app.state.syncing:
+        raise HTTPException(409, "A sync is already in progress")
+    tf = _validate_time_filter(body.time_filter)
+
+    async def _run() -> None:
+        app.state.syncing = True
+        try:
+            cfg = AppConfig.load()
+            current_db = Database(cfg.db_path)
+            for a in cfg.accounts:
+                app.state.auth_failed.discard(a.username)
+            await asyncio.to_thread(sync_all_filter, cfg, current_db, tf, app.state.auth_failed)
+            app.state.last_run = datetime.utcnow()
+        finally:
+            app.state.syncing = False
+
+    asyncio.create_task(_run())
+    return {"ok": True}
+
+
+@app.post("/api/accounts/{idx}/sync")
+async def trigger_account_sync(idx: int):
+    if app.state.syncing:
+        raise HTTPException(409, "A sync is already in progress")
+    config = AppConfig.load()
+    if idx < 0 or idx >= len(config.accounts):
+        raise HTTPException(404, "Account not found")
+    account = config.accounts[idx]
+    db: Database = app.state.db
+
+    async def _run() -> None:
+        app.state.syncing = True
+        app.state.auth_failed.discard(account.username)
+        try:
+            await asyncio.to_thread(sync_account, account, db, config, None, app.state.auth_failed)
+            app.state.last_run = datetime.utcnow()
+        finally:
+            app.state.syncing = False
+
+    asyncio.create_task(_run())
+    return {"ok": True}
+
+
+@app.post("/api/sync/actual-budget")
+async def trigger_actual_budget_sync():
+    if app.state.syncing:
+        raise HTTPException(409, "A sync is already in progress")
+
+    async def _run() -> None:
+        app.state.syncing = True
+        try:
+            cfg = AppConfig.load()
+            current_db = Database(cfg.db_path)
+            if not cfg.actual_budget:
+                raise ValueError("Actual Budget is not configured")
+            await asyncio.to_thread(sync_actual_budget_only, cfg, current_db)
+            app.state.last_run = datetime.utcnow()
+        finally:
+            app.state.syncing = False
+
+    asyncio.create_task(_run())
+    return {"ok": True}
+
+
+@app.post("/api/accounts/{idx}/sync/filter")
+async def trigger_account_filter_sync(idx: int, body: SyncFilterIn):
+    if app.state.syncing:
+        raise HTTPException(409, "A sync is already in progress")
+    config = AppConfig.load()
+    if idx < 0 or idx >= len(config.accounts):
+        raise HTTPException(404, "Account not found")
+    tf = _validate_time_filter(body.time_filter)
+
+    account = config.accounts[idx]
+    db: Database = app.state.db
+
+    async def _run() -> None:
+        app.state.syncing = True
+        app.state.auth_failed.discard(account.username)
+        try:
+            await asyncio.to_thread(sync_account, account, db, config, tf, app.state.auth_failed)
+            app.state.last_run = datetime.utcnow()
+        finally:
+            app.state.syncing = False
+
+    asyncio.create_task(_run())
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Amazon sync errors
+# ---------------------------------------------------------------------------
+
+@app.get("/api/actual-budget/categories")
+async def get_actual_budget_categories():
+    """Return the list of categories from the configured Actual Budget instance."""
+    config = AppConfig.load()
+    if not config.actual_budget:
+        raise HTTPException(status_code=400, detail="Actual Budget is not configured")
+    result = actual_budget_module._call_actual_api(
+        {"action": "getCategories", "budgetSyncId": config.actual_budget.budget_sync_id},
+        config.actual_budget,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=502, detail=result["error"])
+    categories = sorted(
+        (c for c in result.get("data", []) if not c.get("is_income") and not c.get("hidden")),
+        key=lambda c: (c.get("group_name") or "", c.get("name") or ""),
+    )
+    return {"categories": [{"id": c["id"], "name": c.get("name", ""), "group": c.get("group_name", "")} for c in categories]}
+
+
+@app.get("/api/amazon-sync-errors")
+async def list_amazon_sync_errors():
+    """Return recent Amazon sync errors for all accounts."""
+    db: Database = app.state.db
+    config = AppConfig.load()
+    errors = []
+    for acct in config.accounts:
+        info = db.get_account_info(acct.username)
+        if not info:
+            continue
+        acct_errors = db.get_amazon_sync_errors(info["id"], limit=50)
+        for err in acct_errors:
+            err["account_label"] = acct.label or acct.username
+            errors.append(err)
+    # Sort by created_at descending across all accounts
+    errors.sort(key=lambda e: e.get("created_at") or "", reverse=True)
+    return {"errors": errors[:100]}
+
+
+@app.get("/api/amazon-sync-errors/{error_id}")
+async def get_amazon_sync_error_detail(error_id: int):
+    """Return a single Amazon sync error by id."""
+    db: Database = app.state.db
+    err = db.get_amazon_sync_error(error_id)
+    if not err:
+        raise HTTPException(404, "Error not found")
+    # Attach account label for display
+    config = AppConfig.load()
+    for acct in config.accounts:
+        info = db.get_account_info(acct.username)
+        if info and info["id"] == err.get("account_id"):
+            err["account_label"] = acct.label or acct.username
+            break
+    return err

@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amazon Orders Sync</title>
+  <style>
+    :root {
+      --primary: #e47911;
+      --primary-h: #c45500;
+      --dark: #232f3e;
+      --bg: #f0f2f5;
+      --card: #ffffff;
+      --border: #d9dee4;
+      --text: #1a1a2e;
+      --muted: #6c757d;
+      --success: #166534;
+      --success-bg: #dcfce7;
+      --error: #991b1b;
+      --error-bg: #fee2e2;
+      --warn: #92400e;
+      --warn-bg: #fef3c7;
+      --info-bg: #eff6ff;
+      --info: #1e40af;
+      --radius: 8px;
+      --shadow: 0 1px 4px rgba(0,0,0,.10);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.18);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: var(--bg); color: var(--text); line-height: 1.5; }
+
+    /* ── Header ──────────────────────────────────────────────── */
+    header {
+      background: var(--dark); color: #fff; padding: .75rem 1.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 200;
+    }
+    header h1 { font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+    .header-right { display: flex; align-items: center; gap: 1rem; }
+    #status-pill {
+      font-size: .8rem; padding: .25rem .75rem; border-radius: 999px;
+      background: rgba(255,255,255,.12); white-space: nowrap;
+    }
+    #status-pill.syncing { background: var(--primary); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+    /* ── Buttons ─────────────────────────────────────────────── */
+    button { cursor: pointer; border: none; border-radius: var(--radius); font-size: .875rem;
+             font-family: inherit; transition: background .15s, opacity .15s; }
+    .btn { padding: .5rem 1rem; font-weight: 500; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-h); }
+    .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-danger { background: var(--error-bg); color: var(--error); }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #f59e0b; }
+    .btn-warn:hover { background: #fde68a; }
+    .btn-ghost { background: transparent; color: var(--muted); padding: .3rem .6rem; }
+    .btn-ghost:hover { background: rgba(0,0,0,.06); }
+
+    .btn-sm { padding: .3rem .65rem; font-size: .8rem; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .container { max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+
+    /* ── Tab nav ─────────────────────────────────────────────────── */
+    .tab-nav { display: flex; gap: .25rem; margin-bottom: 1.5rem;
+               border-bottom: 2px solid var(--border); }
+    .tab-btn { background: transparent; color: var(--muted); padding: .6rem 1.1rem;
+               border-radius: var(--radius) var(--radius) 0 0; font-size: .9rem;
+               border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .tab-btn:hover { color: var(--text); background: rgba(0,0,0,.04); }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── Section header ──────────────────────────────────────── */
+    .section-head { display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 1rem; }
+    .section-head h2 { font-size: 1rem; font-weight: 600; }
+
+    /* ── Account cards ───────────────────────────────────────── */
+    .account-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1rem 1.2rem; margin-bottom: .75rem; box-shadow: var(--shadow);
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    }
+    .account-avatar {
+      width: 42px; height: 42px; border-radius: 50%; background: var(--dark);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; font-weight: 700; flex-shrink: 0;
+    }
+    .account-body { flex: 1; min-width: 0; }
+    .account-name { font-weight: 600; font-size: .95rem; }
+    .account-email { color: var(--muted); font-size: .8rem; margin-top: 1px; }
+    .account-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      font-size: .75rem; font-weight: 500; padding: .2rem .5rem; border-radius: 999px;
+    }
+    .badge-success { background: var(--success-bg); color: var(--success); }
+    .badge-warn    { background: var(--warn-bg);    color: var(--warn);    }
+    .badge-info    { background: var(--info-bg);    color: var(--info);    }
+    .account-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .empty-state { text-align: center; color: var(--muted); padding: 3rem 1rem; font-size: .95rem; }
+
+    /* ── Settings form ───────────────────────────────────────── */
+    .settings-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1.5rem; box-shadow: var(--shadow);
+    }
+    .field { margin-bottom: 1.2rem; }
+    .field label { display: block; font-size: .85rem; font-weight: 500; margin-bottom: .35rem; }
+    .field input, .field select {
+      width: 100%; padding: .5rem .7rem; border: 1px solid var(--border);
+      border-radius: var(--radius); font-size: .875rem; font-family: inherit;
+      background: #fff; color: var(--text);
+    }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--primary); }
+    .field .hint { font-size: .75rem; color: var(--muted); margin-top: .3rem; }
+    .field-row { display: flex; align-items: center; gap: .75rem; }
+    .field-row input[type=checkbox] { width: 1rem; height: 1rem; cursor: pointer; }
+    .form-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+
+    /* ── Overlay / Modal ─────────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 1rem;
+    }
+    .overlay.hidden { display: none; }
+    .modal {
+      background: var(--card); border-radius: 12px; box-shadow: var(--shadow-lg);
+      width: 100%; max-height: 90vh; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .modal-header h3 { font-size: 1rem; font-weight: 600; }
+    .modal-body { padding: 1.25rem; overflow-y: auto; flex: 1; }
+    .modal-footer {
+      padding: .85rem 1.25rem; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: .5rem; flex-shrink: 0;
+    }
+
+    /* ── Account modal ───────────────────────────────────────── */
+    #account-modal { max-width: 480px; }
+
+    /* ── Toast ───────────────────────────────────────────────── */
+    #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999;
+                        display: flex; flex-direction: column; gap: .5rem; }
+    .toast {
+      padding: .7rem 1rem; border-radius: var(--radius); font-size: .875rem;
+      box-shadow: var(--shadow-lg); max-width: 360px;
+      animation: slide-in .2s ease-out;
+    }
+    .toast-success { background: var(--success-bg); color: var(--success); border-left: 4px solid #16a34a; }
+    .toast-error   { background: var(--error-bg);   color: var(--error);   border-left: 4px solid #dc2626; }
+    .toast-info    { background: var(--info-bg);     color: var(--info);    border-left: 4px solid #3b82f6; }
+    @keyframes slide-in { from{transform:translateX(100%);opacity:0} to{transform:none;opacity:1} }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ───────────────────────────────────────────────────────────── -->
+<header>
+  <h1>🛒 Amazon Orders Sync</h1>
+  <div class="header-right">
+    <span id="status-pill">Loading…</span>
+    <button class="btn btn-secondary btn-sm" id="range-btn" onclick="openRangeModal()">📅 Filter Sync</button>
+    <button class="btn btn-secondary btn-sm" id="ab-sync-btn" onclick="triggerActualBudgetSync()" style="display:none">💰 Sync Actual Budget</button>
+    <button class="btn btn-primary btn-sm" id="sync-btn" onclick="triggerSync()">Sync Now</button>
+    <button class="btn btn-warn btn-sm" id="needs-auth-btn" style="display:none" onclick="switchTab('accounts')">⚠️ Authentication Required</button>
+  </div>
+</header>
+
+<div class="container">
+  <!-- ── Tabs ─────────────────────────────────────────────────────────── -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="accounts" onclick="switchTab('accounts')">Accounts</button>
+    <button class="tab-btn" data-tab="errors" onclick="switchTab('errors')">Sync Errors</button>
+    <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
+  </nav>
+
+  <!-- ── Accounts tab ─────────────────────────────────────────────────── -->
+  <section id="tab-accounts" class="tab-pane active">
+    <div class="section-head">
+      <h2>Configured Accounts</h2>
+      <button class="btn btn-primary btn-sm" onclick="openAccountModal(null)">+ Add Account</button>
+    </div>
+    <div id="accounts-list"><p class="empty-state">Loading…</p></div>
+  </section>
+
+  <!-- ── Sync Errors tab ────────────────────────────────────────────────── -->
+  <section id="tab-errors" class="tab-pane">
+    <div class="section-head">
+      <h2>Amazon Sync Errors</h2>
+      <button class="btn btn-secondary btn-sm" onclick="loadSyncErrors()">&#8635; Refresh</button>
+    </div>
+    <div id="errors-list"><p class="empty-state">Loading…</p></div>
+  </section>
+
+  <!-- ── Settings tab ─────────────────────────────────────────────────── -->
+  <section id="tab-settings" class="tab-pane">
+    <div class="settings-card">
+      <form id="settings-form" onsubmit="saveSettings(event)">
+        <div class="field">
+          <label>Sync Schedule (UTC cron)</label>
+          <input id="s-schedule" type="text" placeholder="0 2 * * *" required />
+          <div class="hint">Standard 5-field cron expression. Examples: <code>0 2 * * *</code> = 2 am daily &nbsp;|&nbsp; <code>0 */6 * * *</code> = every 6 hours</div>
+        </div>
+        <div class="field">
+          <label>Sync Lookback Days</label>
+          <input id="s-lookback" type="number" min="1" max="3650" required />
+          <div class="hint">How many days back each scheduled sync fetches orders. Increase to catch updates like returns on older orders.</div>
+        </div>
+        <div class="field">
+          <label>Log Level</label>
+          <select id="s-log-level">
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+        </div>
+        <div class="field" style="color:var(--muted);font-size:.8rem;">
+          <strong>Database path:</strong> <span id="s-db-path">—</span>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0" />
+        <div style="font-weight:600;margin-bottom:.75rem">Actual Budget Integration</div>
+        <div class="field">
+          <label>Budget Sync ID</label>
+          <input id="s-ab-budget-sync-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <div class="hint">The sync ID of your Actual Budget file.</div>
+        </div>
+        <div class="field">
+          <label>Account ID</label>
+          <input id="s-ab-account-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          <div class="hint">The Actual Budget account where Amazon charges are posted.</div>
+        </div>
+        <div class="field">
+          <label>Server URL</label>
+          <input id="s-ab-server-url" type="text" placeholder="http://localhost:5006" />
+          <div class="hint">URL of your Actual Budget server.</div>
+        </div>
+        <div class="field">
+          <label>Server Password</label>
+          <input id="s-ab-server-password" type="password" placeholder="your-actual-budget-password" />
+          <div class="hint">Leave blank to keep the current password.</div>
+        </div>
+        <div class="field">
+          <div class="field-row">
+            <input id="s-ab-dry-run" type="checkbox" />
+            <label for="s-ab-dry-run" style="margin:0">Actual Budget Sync Dry Run</label>
+          </div>
+          <div class="hint">When checked, transactions are logged but <strong>not</strong> sent to Actual Budget. Uncheck to enable live sync.</div>
+        </div>
+        <div class="field">
+          <label>Sync Start Date (optional)</label>
+          <input id="s-ab-start-date" type="date" />
+          <div class="hint">Only sync Amazon transactions on or after this date. Leave blank to sync all pending transactions.</div>
+        </div>
+        <div class="field">
+          <label>Amazon Category</label>
+          <select id="s-ab-category-name">
+            <option value="">(uncategorized only)</option>
+          </select>
+          <div class="hint">If set, only transactions with this category will be synced. If left blank, only uncategorized transactions will be synced.</div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+<!-- ── Range Sync Modal ───────────────────────────────────────────────────── -->
+<div id="range-overlay" class="overlay hidden" onclick="overlayClick(event,'range-overlay')">
+  <div class="modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Sync by Filter</h3>
+      <button class="btn-ghost" onclick="closeRangeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Account</label>
+        <select id="r-account">
+          <option value="all">All Accounts</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Time Filter</label>
+        <select id="r-filter"></select>
+        <div class="hint">These are Amazon's native order history windows. All orders in the selected window will be fetched and upserted.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeRangeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRangeSync()">Start Sync</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOTP Code Modal ─────────────────────────────────────────────────────── -->
+<div id="totp-overlay" class="overlay hidden" onclick="closeTotpModal()">
+  <div class="modal" style="max-width:360px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="totp-title">Current OTP Code</h3>
+      <button class="btn-ghost" onclick="closeTotpModal()">✕</button>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:1.5rem">
+      <div style="font-size:.85rem;color:var(--muted);margin-bottom:1rem">
+        Enter this code into Amazon to complete authenticator setup.
+      </div>
+      <div id="totp-code" style="font-size:2.8rem;font-weight:700;letter-spacing:.35em;font-family:monospace;color:var(--text)">——————</div>
+      <div style="margin-top:.75rem;display:flex;align-items:center;justify-content:center;gap:.6rem">
+        <div id="totp-bar-wrap" style="flex:1;max-width:180px;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div id="totp-bar" style="height:100%;background:var(--primary);transition:width 1s linear"></div>
+        </div>
+        <span id="totp-remaining" style="font-size:.8rem;color:var(--muted);min-width:3ch">—s</span>
+      </div>
+      <div style="margin-top:1.2rem;font-size:.78rem;color:var(--muted)">Refreshes automatically every 30 seconds</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeTotpModal()">Close</button>
+    </div>
+  </div>
+</div>
+<!-- ── Account Add/Edit Modal ───────────────────────────────────────────── -->
+<div id="account-overlay" class="overlay hidden" onclick="overlayClick(event,'account-overlay')">
+  <div class="modal" id="account-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="account-modal-title">Add Account</h3>
+      <button class="btn-ghost" onclick="closeAccountModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Amazon Email / Username *</label>
+        <input id="a-username" type="email" placeholder="you@example.com" required />
+      </div>
+      <div class="field">
+        <label id="a-password-label">Password *</label>
+        <input id="a-password" type="password" placeholder="Amazon password" />
+        <div class="hint" id="a-password-hint"></div>
+      </div>
+      <div class="field">
+        <label>Display Label (optional)</label>
+        <input id="a-label" type="text" placeholder="e.g. Personal, Work" />
+      </div>
+      <div class="field">
+        <label>Amazon Domain (optional)</label>
+        <input id="a-domain" type="text" placeholder="amazon.com (default)" />
+        <div class="hint">Only set this for non-.com Amazon sites, e.g. <code>amazon.co.uk</code></div>
+      </div>
+      <div class="field">
+        <label>TOTP Secret Key (for 2FA) *</label>
+        <input id="a-otp" type="password" placeholder="32-character base32 secret" />
+        <div class="hint">
+          Required for automated login. To get this secret:
+          <ol style="margin:.4rem 0 0 1.2rem;line-height:1.8">
+            <li>Go to <strong>Amazon → Account → Login &amp; Security → Two-Step Verification</strong></li>
+            <li>Add a new authenticator app (or manage existing)</li>
+            <li>Choose <strong>"Can't scan the barcode?"</strong> to reveal the text secret</li>
+            <li>Copy that secret here — this app will generate the OTP codes automatically</li>
+            <li>Verify by entering a code from this app into Amazon to complete setup</li>
+          </ol>
+        </div>
+        <div id="a-otp-clear-row" class="field-row" style="margin-top:.4rem;display:none">
+          <input id="a-otp-clear" type="checkbox" />
+          <label for="a-otp-clear" style="margin:0;font-size:.8rem">Clear existing TOTP secret</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAccountModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAccount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast container ──────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const S = {
+  accounts: [],     // from GET /api/accounts
+  status: null,     // from GET /api/status
+  settings: null,   // from GET /api/settings
+  editingIdx: null, // null = adding, number = editing
+  pollTimer: null,
+};
+
+// ─── API helper ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadAccounts(), loadSettings(), refreshStatus()]);
+  startPolling();
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'errors') loadSyncErrors();
+}
+
+// ─── Status polling ───────────────────────────────────────────────────────────
+function startPolling() {
+  if (S.pollTimer) return;
+  S.pollTimer = setInterval(refreshStatus, 12000);
+}
+
+async function refreshStatus() {
+  try {
+    S.status = await api('GET', '/api/status');
+    renderStatusPill();
+    renderAccounts(); // refresh session/last-sync badges
+  } catch (_) {}
+}
+
+function renderStatusPill() {
+  const pill       = document.getElementById('status-pill');
+  const btn        = document.getElementById('sync-btn');
+  const rangeBtn   = document.getElementById('range-btn');
+  const abSyncBtn  = document.getElementById('ab-sync-btn');
+  const needsAuthBtn = document.getElementById('needs-auth-btn');
+  if (!S.status) return;
+
+  // Show Actual Budget button only when AB is configured (inferred from settings)
+  if (abSyncBtn) {
+    const abConfigured = S.settings && S.settings.actual_budget && S.settings.actual_budget.budget_sync_id;
+    abSyncBtn.style.display = abConfigured ? '' : 'none';
+  }
+
+  const anyNeedsAuth = S.status.accounts && S.status.accounts.some(a => a.needs_auth);
+
+  if (S.status.syncing) {
+    pill.textContent = '⏳ Syncing…';
+    pill.classList.add('syncing');
+    btn.disabled = true;
+    rangeBtn.disabled = true;
+    if (abSyncBtn) abSyncBtn.disabled = true;
+    needsAuthBtn.style.display = 'none';
+  } else {
+    pill.classList.remove('syncing');
+    rangeBtn.disabled = false;
+    if (abSyncBtn) abSyncBtn.disabled = false;
+
+    if (anyNeedsAuth) {
+      btn.style.display = 'none';
+      needsAuthBtn.style.display = '';
+    } else {
+      btn.style.display = '';
+      btn.disabled = false;
+      needsAuthBtn.style.display = 'none';
+    }
+
+    if (S.status.next_run) {
+      const next = new Date(S.status.next_run);
+      pill.textContent = `Next: ${next.toLocaleString()}`;
+    } else {
+      pill.textContent = S.status.last_run
+        ? `Last: ${new Date(S.status.last_run).toLocaleString()}`
+        : 'No sync yet';
+    }
+  }
+}
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+async function loadAccounts() {
+  try {
+    S.accounts = await api('GET', '/api/accounts');
+    renderAccounts();
+  } catch (e) { toast('Failed to load accounts: ' + e.message, 'error'); }
+}
+
+function renderAccounts() {
+  const el = document.getElementById('accounts-list');
+  if (!S.accounts.length) {
+    el.innerHTML = '<p class="empty-state">No accounts yet. Click <strong>+ Add Account</strong> to get started.</p>';
+    return;
+  }
+
+  el.innerHTML = S.accounts.map((a, idx) => {
+    const st = S.status && S.status.accounts
+      ? S.status.accounts.find(x => x.username === a.username)
+      : null;
+
+    const needsAuth  = st ? st.needs_auth : true;  // new accounts default to needing auth
+    const authFailed = st && st.auth_failed;
+    const hasTotp    = a.has_otp;
+    const lastSync   = st && st.last_synced_at
+      ? `Last sync: ${new Date(st.last_synced_at).toLocaleString()}`
+      : 'Never synced';
+    const initial = (a.label || a.username).charAt(0).toUpperCase();
+
+    const authStatusBadge = needsAuth
+      ? (authFailed
+          ? `<span class="badge badge-warn">⚠️ Authentication failed</span>`
+          : `<span class="badge badge-info">○ Needs authentication</span>`)
+      : `<span class="badge badge-success">● Authenticated</span>`;
+
+    const actionButtons = needsAuth
+      ? `${hasTotp ? `<button class="btn btn-secondary btn-sm" onclick="showTotpCode(${idx})">🔢 Show Code</button>` : ''}
+         <button class="btn btn-warn btn-sm" onclick="authenticateAccount(${idx})">🔐 Authenticate</button>`
+      : `${hasTotp ? `<button class="btn btn-secondary btn-sm" onclick="showTotpCode(${idx})">🔢 Show Code</button>` : ''}
+         <button class="btn btn-secondary btn-sm" onclick="triggerAccountSync(${idx})">&#8635; Sync</button>`;
+
+    return `
+    <div class="account-card">
+      <div class="account-avatar">${initial}</div>
+      <div class="account-body">
+        <div class="account-name">${esc(a.label || a.username)}</div>
+        ${a.label ? `<div class="account-email">${esc(a.username)}</div>` : ''}
+        <div class="account-meta">
+          <span class="badge ${hasTotp ? 'badge-success' : 'badge-warn'}">
+            ${hasTotp ? '🔑 TOTP configured' : '⚠ No TOTP secret'}
+          </span>
+          ${authStatusBadge}
+          ${a.domain  ? `<span class="badge badge-info">${esc(a.domain)}</span>` : ''}
+          ${!needsAuth ? `<span style="font-size:.75rem;color:var(--muted)">${lastSync}</span>` : ''}
+        </div>
+      </div>
+      <div class="account-actions">
+        ${actionButtons}
+        <button class="btn btn-secondary btn-sm" onclick="openAccountModal(${idx})">Edit</button>
+        <button class="btn btn-danger btn-sm"    onclick="deleteAccount(${idx})">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── TOTP code modal ──────────────────────────────────────────────────────────
+let _totpIdx = null;
+let _totpTimer = null;
+
+async function showTotpCode(idx) {
+  _totpIdx = idx;
+  const a = S.accounts[idx];
+  document.getElementById('totp-title').textContent =
+    `OTP Code — ${a.label || a.username}`;
+  document.getElementById('totp-code').textContent = '——————';
+  document.getElementById('totp-remaining').textContent = '—s';
+  document.getElementById('totp-bar').style.width = '100%';
+  document.getElementById('totp-overlay').classList.remove('hidden');
+  await _refreshTotpCode();
+}
+
+async function _refreshTotpCode() {
+  if (_totpIdx === null) return;
+  try {
+    const data = await api('GET', `/api/accounts/${_totpIdx}/totp`);
+    const raw = String(data.code).padStart(6, '0');
+    document.getElementById('totp-code').textContent = raw;
+    document.getElementById('totp-remaining').textContent = data.remaining + 's';
+    document.getElementById('totp-bar').style.width =
+      Math.round((data.remaining / 30) * 100) + '%';
+
+    // Schedule next refresh just after the window rolls over
+    clearTimeout(_totpTimer);
+    _totpTimer = setTimeout(_refreshTotpCode, data.remaining * 1000 + 200);
+  } catch (e) {
+    document.getElementById('totp-code').textContent = 'Error';
+  }
+}
+
+function closeTotpModal() {
+  _totpIdx = null;
+  clearTimeout(_totpTimer);
+  document.getElementById('totp-overlay').classList.add('hidden');
+}
+
+// ─── Account modal ────────────────────────────────────────────────────────────
+function openAccountModal(idx) {
+  S.editingIdx = idx;
+  const isEdit = idx !== null;
+  document.getElementById('account-modal-title').textContent = isEdit ? 'Edit Account' : 'Add Account';
+
+  document.getElementById('a-password-label').textContent = isEdit ? 'Password (leave blank to keep)' : 'Password *';
+  document.getElementById('a-password-hint').textContent  = isEdit ? 'Leave blank to keep the current password.' : '';
+
+  if (isEdit) {
+    const a = S.accounts[idx];
+    document.getElementById('a-username').value = a.username;
+    document.getElementById('a-password').value = '';
+    document.getElementById('a-label').value    = a.label   || '';
+    document.getElementById('a-domain').value   = a.domain  || '';
+    document.getElementById('a-otp').value      = '';
+    const clearRow = document.getElementById('a-otp-clear-row');
+    clearRow.style.display = a.has_otp ? 'flex' : 'none';
+    document.getElementById('a-otp-clear').checked = false;
+  } else {
+    ['a-username','a-password','a-label','a-domain','a-otp'].forEach(id =>
+      document.getElementById(id).value = '');
+    document.getElementById('a-otp-clear-row').style.display = 'none';
+  }
+
+  document.getElementById('account-overlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('a-username').focus(), 50);
+}
+
+function closeAccountModal() {
+  document.getElementById('account-overlay').classList.add('hidden');
+}
+
+async function saveAccount() {
+  const username = document.getElementById('a-username').value.trim();
+  const password = document.getElementById('a-password').value;
+  const label    = document.getElementById('a-label').value.trim();
+  const domain   = document.getElementById('a-domain').value.trim();
+  const otp      = document.getElementById('a-otp').value.trim();
+  const clearOtp = document.getElementById('a-otp-clear').checked;
+
+  if (!username) { toast('Username is required', 'error'); return; }
+  if (S.editingIdx === null && !password) { toast('Password is required', 'error'); return; }
+
+  try {
+    if (S.editingIdx === null) {
+      await api('POST', '/api/accounts', { username, password, label: label||null, domain: domain||null, otp_secret_key: otp||null });
+      toast('Account added', 'success');
+    } else {
+      await api('PUT', `/api/accounts/${S.editingIdx}`, {
+        username, password: password||null, label: label||null,
+        domain: domain||null, otp_secret_key: otp||null, clear_otp: clearOtp,
+      });
+      toast('Account updated', 'success');
+    }
+    closeAccountModal();
+    await loadAccounts();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function deleteAccount(idx) {
+  const a = S.accounts[idx];
+  if (!confirm(`Delete account "${a.label || a.username}"?\n\nThis removes it from the config and deletes its session file.`)) return;
+  try {
+    await api('DELETE', `/api/accounts/${idx}`);
+    toast('Account deleted', 'success');
+    await loadAccounts();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ─── Filter Sync modal ─────────────────────────────────────────────────────────
+const FILTER_OPTIONS = [
+  { value: 'last30',   label: 'Last 30 days' },
+  { value: 'months-3', label: 'Last 3 months' },
+  ...Array.from({ length: new Date().getFullYear() - 2009 }, (_, i) => {
+    const y = new Date().getFullYear() - i;
+    return { value: `year-${y}`, label: String(y) };
+  }),
+];
+
+function openRangeModal() {
+  // Populate filter dropdown
+  const filterSel = document.getElementById('r-filter');
+  filterSel.innerHTML = FILTER_OPTIONS.map(o =>
+    `<option value="${o.value}">${o.label}</option>`
+  ).join('');
+
+  // Populate account selector
+  const sel = document.getElementById('r-account');
+  sel.innerHTML = '<option value="all">All Accounts</option>' +
+    S.accounts.map((a, i) =>
+      `<option value="${i}">${esc(a.label || a.username)}</option>`
+    ).join('');
+
+  document.getElementById('range-overlay').classList.remove('hidden');
+}
+
+function closeRangeModal() {
+  document.getElementById('range-overlay').classList.add('hidden');
+}
+
+async function submitRangeSync() {
+  const tf   = document.getElementById('r-filter').value;
+  const acct = document.getElementById('r-account').value;
+
+  const body = { time_filter: tf };
+  const url  = acct === 'all' ? '/api/sync/filter' : `/api/accounts/${acct}/sync/filter`;
+
+  try {
+    await api('POST', url, body);
+    toast('Sync started', 'info');
+    closeRangeModal();
+    setTimeout(refreshStatus, 800);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ─── Sync triggers ────────────────────────────────────────────────────────────
+async function authenticateAccount(idx) {
+  const a = S.accounts[idx];
+  try {
+    await api('POST', `/api/accounts/${idx}/authenticate`);
+    toast(`Authenticating ${a.label || a.username}…`, 'info');
+    setTimeout(refreshStatus, 800);
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+async function triggerActualBudgetSync() {
+  try {
+    await api('POST', '/api/sync/actual-budget');
+    toast('Actual Budget sync started', 'info');
+    setTimeout(refreshStatus, 800);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function triggerSync() {
+  try {
+    await api('POST', '/api/sync');
+    toast('Sync started', 'info');
+    setTimeout(refreshStatus, 800);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function triggerAccountSync(idx) {
+  const a = S.accounts[idx];
+  try {
+    await api('POST', `/api/accounts/${idx}/sync`);
+    toast(`Sync started for ${a.label || a.username}`, 'info');
+    setTimeout(refreshStatus, 800);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+async function loadActualBudgetCategories(selectedName) {
+  const sel = document.getElementById('s-ab-category-name');
+  try {
+    const res = await api('GET', '/api/actual-budget/categories');
+    // Rebuild options preserving the blank/uncategorized option
+    sel.innerHTML = '<option value="">(uncategorized only)</option>';
+    let lastGroup = null;
+    let optgroup = null;
+    for (const cat of (res.categories || [])) {
+      if (cat.group !== lastGroup) {
+        optgroup = document.createElement('optgroup');
+        optgroup.label = cat.group || 'Uncategorized';
+        sel.appendChild(optgroup);
+        lastGroup = cat.group;
+      }
+      const opt = document.createElement('option');
+      opt.value = cat.name;
+      opt.textContent = cat.name;
+      if (cat.name === selectedName) opt.selected = true;
+      (optgroup || sel).appendChild(opt);
+    }
+  } catch (e) {
+    // If categories can't be loaded (AB not configured yet), keep blank option only
+    sel.innerHTML = '<option value="">(uncategorized only)</option>';
+    if (selectedName) {
+      const opt = document.createElement('option');
+      opt.value = selectedName;
+      opt.textContent = selectedName;
+      opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+async function loadSettings() {
+  try {
+    const s = await api('GET', '/api/settings');
+    S.settings = s;
+    document.getElementById('s-schedule').value     = s.sync_schedule;
+    document.getElementById('s-lookback').value     = s.lookback_days;
+    document.getElementById('s-log-level').value    = s.log_level;
+    document.getElementById('s-db-path').textContent   = s.db_path;
+    const ab = s.actual_budget || {};
+    document.getElementById('s-ab-budget-sync-id').value   = ab.budget_sync_id   || '';
+    document.getElementById('s-ab-account-id').value       = ab.account_id       || '';
+    document.getElementById('s-ab-server-url').value       = ab.server_url       || '';
+    document.getElementById('s-ab-server-password').value  = '';
+    document.getElementById('s-ab-dry-run').checked        = ab.dry_run !== false;
+    document.getElementById('s-ab-start-date').value       = ab.actual_sync_start_date || '';
+    await loadActualBudgetCategories(ab.amazon_category_name || '');
+    renderStatusPill(); // update AB button visibility now that S.settings is loaded
+  } catch (e) { toast('Failed to load settings: ' + e.message, 'error'); }
+}
+
+async function saveSettings(evt) {
+  evt.preventDefault();
+  try {
+    const abSyncId   = document.getElementById('s-ab-budget-sync-id').value.trim();
+    const abAcctId   = document.getElementById('s-ab-account-id').value.trim();
+    const abServerUrl = document.getElementById('s-ab-server-url').value.trim();
+    const abServerPw  = document.getElementById('s-ab-server-password').value;
+    const abDryRun   = document.getElementById('s-ab-dry-run').checked;
+    // Preserve existing password if the field was left blank
+    const existingPw = (S.settings && S.settings.actual_budget && S.settings.actual_budget.server_password) || '';
+    const actualBudget = (abSyncId || abAcctId)
+      ? {
+          budget_sync_id: abSyncId,
+          account_id: abAcctId,
+          server_url: abServerUrl || 'http://localhost:5006',
+          server_password: abServerPw || existingPw,
+          dry_run: abDryRun,
+          actual_sync_start_date: document.getElementById('s-ab-start-date').value || null,
+          amazon_category_name: document.getElementById('s-ab-category-name').value.trim(),
+        }
+      : null;
+    await api('PUT', '/api/settings', {
+      sync_schedule:  document.getElementById('s-schedule').value.trim(),
+      lookback_days:  parseInt(document.getElementById('s-lookback').value, 10),
+      log_level:      document.getElementById('s-log-level').value,
+      actual_budget:  actualBudget,
+    });
+    S.settings = await api('GET', '/api/settings');
+    toast('Settings saved', 'success');
+    await refreshStatus();
+  } catch (e) { toast('Error: ' + e.message, 'error'); }
+}
+
+// ─── Overlay click-outside ────────────────────────────────────────────────────
+function overlayClick(evt, overlayId) {
+  if (evt.target.id === overlayId) {
+    if (overlayId === 'account-overlay') closeAccountModal();
+    else if (overlayId === 'range-overlay') closeRangeModal();
+  }
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ─── Util ─────────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function formatOrderJson(raw) {
+  if (raw == null || raw === '') {
+    return '';
+  }
+  if (typeof raw === 'object') {
+    return JSON.stringify(raw, null, 2);
+  }
+  try {
+    return JSON.stringify(JSON.parse(String(raw)), null, 2);
+  } catch {
+    return String(raw);
+  }
+}
+
+// ─── Sync Errors ────────────────────────────────────────────────────────────
+async function loadSyncErrors() {
+  const el = document.getElementById('errors-list');
+  el.innerHTML = '<p class="empty-state">Loading…</p>';
+  try {
+    const data = await api('GET', '/api/amazon-sync-errors');
+    const errors = data.errors || [];
+    if (!errors.length) {
+      el.innerHTML = '<p class="empty-state">No sync errors. Everything looks good!</p>';
+      return;
+    }
+    el.innerHTML = errors.map(e => {
+      const ts = e.created_at ? new Date(e.created_at).toLocaleString() : '—';
+      const orderJsonText = formatOrderJson(e.order_json);
+      const orderJsonBlock = orderJsonText
+        ? `<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.8rem;color:var(--muted)">Order JSON</summary><pre style="margin-top:.4rem;max-height:260px;overflow:auto;background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:.6rem;font-size:.75rem;line-height:1.35">${esc(orderJsonText)}</pre></details>`
+        : '';
+      const orderLink = e.order_number
+        ? `<a href="https://www.amazon.com/gp/your-account/order-details/ref=oh_aui_search?orderId=${esc(e.order_number)}" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none;font-weight:600">${esc(e.order_number)}</a>`
+        : '—';
+      return `
+      <div class="account-card" style="align-items:flex-start">
+        <div class="account-body" style="flex:1">
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem">
+            <span class="badge badge-warn">${esc(e.error_type)}</span>
+            <span style="font-size:.8rem;color:var(--muted)">${esc(ts)}</span>
+            <span style="font-size:.8rem;color:var(--muted)">Account: ${esc(e.account_label || '—')}</span>
+          </div>
+          <div style="font-size:.9rem;margin-bottom:.25rem">${esc(e.message)}</div>
+          <div style="font-size:.8rem;color:var(--muted)">Order: ${orderLink}</div>
+          ${orderJsonBlock}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<p class="empty-state" style="color:var(--error)">Failed to load errors: ${esc(e.message)}</p>`;
+  }
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+services:
+  #######################################
+  # Amazon Orders Sync Service
+  #######################################
+  amazon-orders:
+    build: .
+    restart: unless-stopped
+    container_name: amazon_orders_sync
+    ports:
+      - "${SYNC_WEBAPP_PORT:-8080}:8080"
+    environment:
+      DATA_DIR: "/data"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      AMAZON_ACCOUNTS: "${AMAZON_ACCOUNTS:-}"
+      ACTUAL_SERVER_URL: "${ACTUAL_SERVER_URL:-http://localhost:5006/}"
+      ACTUAL_SERVER_PASSWORD: "${ACTUAL_SERVER_PASSWORD:-changeme}"
+    volumes:
+      - ./data:/data
+
+  ########################################
+  # Actual Budget Server
+  ########################################
+  actual_server:
+    image: actualbudget/actual-server:nightly
+    container_name: actual_budget
+    pull_policy: always
+    ports:
+      - "${ACTUAL_WEBAPP_PORT:-5006}:5006"
+    volumes:
+      - ./data/actual-data:/data
+    restart: unless-stopped

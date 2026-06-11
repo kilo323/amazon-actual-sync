@@ -1,0 +1,44 @@
+# Credentials – never commit this
+.env
+.env.*
+!.env.example
+
+# Service/runtime secrets
+*.pem
+*.key
+*.p12
+*.pfx
+*.kdbx
+
+# SQLite data/config/cookies (when running locally outside Docker)
+data/
+!data/
+!data/config.example.json
+data/*
+!data/config.example.json
+
+# raw data dumps
+test_module/
+
+# Local logs
+*.log
+logs/
+
+# Session cookie files
+.session-*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
