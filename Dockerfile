@@ -57,6 +57,8 @@ COPY app/ ./app/
 COPY webapp/ ./webapp/
 COPY actual-budget-api.js ./
 
+RUN chown -R ${APP_UID}:${APP_GID} /app
+
 USER appuser
 
 EXPOSE 8080
