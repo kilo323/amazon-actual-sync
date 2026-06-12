@@ -20,7 +20,7 @@ RUN set -eux; \
     if ! getent group "${APP_GID}" >/dev/null; then groupadd -g "${APP_GID}" appgroup; fi; \
     if ! id -u appuser >/dev/null 2>&1; then useradd -o -m -u "${APP_UID}" -g "${APP_GID}" appuser; fi; \
     mkdir -p /data; \
-    chown ${APP_UID}:${APP_GID} /data
+    if [ "${APP_UID}" != "0" ]; then chown ${APP_UID}:${APP_GID} /data; fi
 
 WORKDIR /app
 
@@ -57,7 +57,7 @@ COPY app/ ./app/
 COPY webapp/ ./webapp/
 COPY actual-budget-api.js ./
 
-RUN chown -R ${APP_UID}:${APP_GID} /app
+RUN if [ "${APP_UID}" != "0" ]; then chown -R ${APP_UID}:${APP_GID} /app; fi
 
 USER appuser
 

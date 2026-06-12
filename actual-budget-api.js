@@ -113,6 +113,13 @@ async function main() {
         break;
       }
 
+      case 'runBankSync': {
+        const { accountId } = request;
+        await actual.runBankSync({ accountId });
+        result = { success: true };
+        break;
+      }
+
       default:
         result = { error: 'Unknown action: ' + action };
     }

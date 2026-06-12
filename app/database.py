@@ -582,6 +582,101 @@ class Database:
             return datetime.fromisoformat(row["oldest"])
         return None
 
+    def get_order_summaries(self, start_date: str, end_date: str) -> list:
+        """Return orders (with items) within an inclusive order date range."""
+        with self._connect() as conn:
+            order_rows = conn.execute(
+                """
+                SELECT
+                    o.id,
+                    o.order_number,
+                    o.order_placed_date,
+                    o.grand_total,
+                    o.cancelled,
+                    o.order_details_link,
+                    o.shipping_total,
+                    o.free_shipping,
+                    o.promotion_applied,
+                    o.coupon_savings,
+                    o.subscription_discount,
+                    o.multibuy_discount,
+                    o.amazon_discount,
+                    o.reward_points,
+                    o.gift_card,
+                    o.refund_total,
+                    a.username AS account_username,
+                    a.label AS account_label
+                FROM orders o
+                JOIN accounts a ON a.id = o.account_id
+                WHERE o.order_placed_date IS NOT NULL
+                  AND o.order_placed_date >= ?
+                  AND o.order_placed_date <= ?
+                ORDER BY o.order_placed_date DESC, o.order_number DESC
+                """,
+                (start_date, end_date),
+            ).fetchall()
+
+            orders = [dict(r) for r in order_rows]
+            if not orders:
+                return []
+
+            order_ids = [o["id"] for o in orders]
+            placeholders = ",".join("?" for _ in order_ids)
+            item_rows = conn.execute(
+                f"""
+                SELECT
+                    order_id,
+                    title,
+                    price,
+                    quantity
+                FROM order_items
+                WHERE order_id IN ({placeholders})
+                ORDER BY id
+                """,
+                order_ids,
+            ).fetchall()
+            item_rows = [dict(r) for r in item_rows]
+
+            shipment_rows = conn.execute(
+                f"""
+                SELECT
+                    order_id,
+                    delivery_status
+                FROM order_shipments
+                WHERE order_id IN ({placeholders})
+                ORDER BY id
+                """,
+                order_ids,
+            ).fetchall()
+            shipment_rows = [dict(r) for r in shipment_rows]
+
+        items_by_order: dict[int, list] = {}
+        for d in item_rows:
+            order_id = int(d["order_id"])
+            items_by_order.setdefault(order_id, []).append(
+                {
+                    "title": d.get("title"),
+                    "price": d.get("price"),
+                    "quantity": d.get("quantity"),
+                }
+            )
+
+        shipment_statuses_by_order: dict[int, list[str]] = {}
+        for d in shipment_rows:
+            order_id = int(d["order_id"])
+            status = (d.get("delivery_status") or "").strip()
+            if status:
+                shipment_statuses_by_order.setdefault(order_id, []).append(status)
+
+        for order in orders:
+            order_items = items_by_order.get(int(order["id"]), [])
+            order["items"] = order_items
+            order["item_count"] = sum((it.get("quantity") or 1) for it in order_items)
+            order["shipment_statuses"] = shipment_statuses_by_order.get(int(order["id"]), [])
+            order["account_label"] = order.get("account_label") or order.get("account_username")
+
+        return orders
+
     # -----------------------------------------------------------------------
     # Amazon sync error logging
     # -----------------------------------------------------------------------

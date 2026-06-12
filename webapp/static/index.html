@@ -64,7 +64,7 @@
     button:disabled { opacity: .5; cursor: not-allowed; }
 
     /* ── Layout ──────────────────────────────────────────────────── */
-    .container { max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+    .container { max-width: 1160px; margin: 0 auto; padding: 1.5rem; }
 
     /* ── Tab nav ─────────────────────────────────────────────────── */
     .tab-nav { display: flex; gap: .25rem; margin-bottom: 1.5rem;
@@ -112,6 +112,208 @@
       background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
       padding: 1.5rem; box-shadow: var(--shadow);
     }
+
+    /* ── Orders summary ────────────────────────────────────── */
+    .orders-controls {
+      display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+    .orders-controls .field { margin-bottom: 0; min-width: 180px; }
+    .orders-stats {
+      display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .8rem;
+    }
+    .badge-quick-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      margin-bottom: .8rem;
+    }
+    .badge-quick-btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 999px;
+      padding: .28rem .65rem;
+      font-size: .78rem;
+      font-weight: 600;
+      line-height: 1.1;
+    }
+    .badge-quick-btn:hover {
+      background: #f8fafc;
+    }
+    .badge-quick-btn.active {
+      background: var(--dark);
+      border-color: var(--dark);
+      color: #fff;
+    }
+    .orders-table-wrap {
+      background: #fff; border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: auto; box-shadow: var(--shadow);
+    }
+    .orders-table {
+      width: 100%; min-width: 980px; border-collapse: collapse;
+    }
+    .orders-table th,
+    .orders-table td {
+      border-bottom: 1px solid var(--border);
+      padding: .55rem .6rem;
+      text-align: left;
+      vertical-align: top;
+      font-size: .84rem;
+    }
+    .orders-table thead th {
+      background: #f8fafc;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .orders-table .filter-row th {
+      background: #fdfefe;
+      top: 38px;
+    }
+    .orders-table input,
+    .orders-table select {
+      width: 100%; padding: .35rem .45rem; border: 1px solid var(--border);
+      border-radius: 6px; font-size: .78rem;
+    }
+    .sort-btn {
+      background: transparent; border: none; color: var(--text); font-weight: 600;
+      cursor: pointer; width: 100%; text-align: left; font-size: .82rem; padding: 0;
+    }
+    .sort-indicator { color: var(--muted); margin-left: .2rem; font-size: .72rem; }
+    .order-items {
+      margin: 0; padding-left: 1rem; max-width: 360px;
+    }
+    .order-items li { margin-bottom: .2rem; }
+    .invoice-summary {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: .35rem;
+      margin-bottom: .45rem;
+    }
+    .invoice-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .35rem;
+      margin-bottom: .4rem;
+    }
+    .invoice-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: .72rem;
+      font-weight: 600;
+      padding: .18rem .45rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      line-height: 1.2;
+    }
+    .invoice-badge.status-delivered {
+      background: var(--success-bg);
+      color: var(--success);
+      border-color: #86efac;
+    }
+    .invoice-badge.status-cancelled {
+      background: var(--error-bg);
+      color: var(--error);
+      border-color: #fca5a5;
+    }
+    .invoice-badge.status-return {
+      background: #fff7ed;
+      color: #c2410c;
+      border-color: #fdba74;
+    }
+    .invoice-badge.status-other {
+      background: #f3f4f6;
+      color: #374151;
+      border-color: #d1d5db;
+    }
+    .invoice-badge.reconcile-ok {
+      background: #ecfeff;
+      color: #155e75;
+      border-color: #67e8f9;
+    }
+    .invoice-badge.reconcile-adjusted {
+      background: #fef3c7;
+      color: #92400e;
+      border-color: #f59e0b;
+    }
+    .invoice-summary .box {
+      flex: 1 1 0;
+      min-width: 0;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .22rem .35rem;
+      display: grid;
+      gap: .1rem;
+    }
+    .invoice-summary .box.refund-alert {
+      background: #fee2e2;
+      border-color: #fca5a5;
+    }
+    .invoice-summary .box.refund-alert .lbl,
+    .invoice-summary .box.refund-alert .val {
+      color: #991b1b;
+    }
+    .invoice-summary .box.refund-positive {
+      background: #dcfce7;
+      border-color: #86efac;
+    }
+    .invoice-summary .box.refund-positive .lbl,
+    .invoice-summary .box.refund-positive .val {
+      color: #166534;
+    }
+    .invoice-summary .lbl {
+      font-size: .66rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      line-height: 1.1;
+    }
+    .invoice-summary .val {
+      font-size: .76rem;
+      font-weight: 600;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+    .invoice-lines {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .78rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .invoice-lines th,
+    .invoice-lines td {
+      border-bottom: 1px solid var(--border);
+      padding: .3rem .4rem;
+      vertical-align: top;
+    }
+    .invoice-lines th {
+      background: #f8fafc;
+      font-size: .72rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .02em;
+    }
+    .invoice-lines td.qty,
+    .invoice-lines td.unit,
+    .invoice-lines td.total {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .invoice-lines tr:last-child td {
+      border-bottom: none;
+    }
+    .invoice-lines .negative {
+      color: var(--success);
+    }
+    .invoice-lines .total-row td {
+      background: #fafafa;
+      font-weight: 600;
+    }
+    .amount-col { white-space: nowrap; }
     .field { margin-bottom: 1.2rem; }
     .field label { display: block; font-size: .85rem; font-weight: 500; margin-bottom: .35rem; }
     .field input, .field select {
@@ -184,6 +386,7 @@
   <!-- ── Tabs ─────────────────────────────────────────────────────────── -->
   <nav class="tab-nav">
     <button class="tab-btn active" data-tab="accounts" onclick="switchTab('accounts')">Accounts</button>
+    <button class="tab-btn" data-tab="orders" onclick="switchTab('orders')">Orders Summary</button>
     <button class="tab-btn" data-tab="errors" onclick="switchTab('errors')">Sync Errors</button>
     <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
   </nav>
@@ -204,6 +407,60 @@
       <button class="btn btn-secondary btn-sm" onclick="loadSyncErrors()">&#8635; Refresh</button>
     </div>
     <div id="errors-list"><p class="empty-state">Loading…</p></div>
+  </section>
+
+  <!-- ── Orders summary tab ─────────────────────────────────────────────── -->
+  <section id="tab-orders" class="tab-pane">
+    <div class="section-head">
+      <h2>Orders Summary</h2>
+      <button class="btn btn-secondary btn-sm" onclick="loadOrdersSummary()">&#8635; Refresh</button>
+    </div>
+
+    <div class="orders-controls">
+      <div class="field">
+        <label>Start Date</label>
+        <input id="orders-start-date" type="date" />
+      </div>
+      <div class="field">
+        <label>End Date</label>
+        <input id="orders-end-date" type="date" />
+      </div>
+      <button class="btn btn-primary" onclick="loadOrdersSummary()">Apply</button>
+      <button class="btn btn-secondary" onclick="resetOrdersDateRange()">Last 30 Days</button>
+      <button class="btn btn-secondary" onclick="exportOrdersCsv()">Export CSV</button>
+    </div>
+
+    <div id="orders-stats" class="orders-stats"></div>
+    <div id="badge-quick-filters" class="badge-quick-filters"></div>
+    <div class="orders-table-wrap">
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th><button class="sort-btn" onclick="setOrdersSort('order_placed_date')">Order Date<span id="sort-order_placed_date" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('account_label')">Account<span id="sort-account_label" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('order_number')">Order #<span id="sort-order_number" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('invoice_text')">Invoice<span id="sort-invoice_text" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('item_count')">Order Items<span id="sort-item_count" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('order_total')">Order Total<span id="sort-order_total" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('discount_total')">Discounts<span id="sort-discount_total" class="sort-indicator"></span></button></th>
+            <th><button class="sort-btn" onclick="setOrdersSort('paid_amount')">Paid Amount<span id="sort-paid_amount" class="sort-indicator"></span></button></th>
+          </tr>
+          <tr class="filter-row">
+            <th><input id="filter-order_placed_date" type="text" placeholder="Filter date" oninput="setOrdersFilter('order_placed_date', this.value)" /></th>
+            <th><input id="filter-account_label" type="text" placeholder="Filter account" oninput="setOrdersFilter('account_label', this.value)" /></th>
+            <th><input id="filter-order_number" type="text" placeholder="Filter order #" oninput="setOrdersFilter('order_number', this.value)" /></th>
+            <th><input id="filter-invoice_text" type="text" placeholder="Filter invoice" oninput="setOrdersFilter('invoice_text', this.value)" /></th>
+            <th><input id="filter-item_count" type="text" placeholder="Filter units" oninput="setOrdersFilter('item_count', this.value)" /></th>
+            <th><input id="filter-order_total" type="text" placeholder="Filter order total" oninput="setOrdersFilter('order_total', this.value)" /></th>
+            <th><input id="filter-discount_total" type="text" placeholder="Filter discounts" oninput="setOrdersFilter('discount_total', this.value)" /></th>
+            <th><input id="filter-paid_amount" type="text" placeholder="Filter paid amount" oninput="setOrdersFilter('paid_amount', this.value)" /></th>
+          </tr>
+        </thead>
+        <tbody id="orders-tbody">
+          <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <!-- ── Settings tab ─────────────────────────────────────────────────── -->
@@ -395,9 +652,25 @@ const S = {
   accounts: [],     // from GET /api/accounts
   status: null,     // from GET /api/status
   settings: null,   // from GET /api/settings
+  orders: [],       // from GET /api/orders/summary
+  ordersSummary: null,
+  ordersDateRange: null,
+  ordersSort: { key: 'order_placed_date', dir: 'desc' },
+  ordersFilters: {
+    order_placed_date: '',
+    account_label: '',
+    order_number: '',
+    invoice_text: '',
+    item_count: '',
+    order_total: '',
+    discount_total: '',
+    paid_amount: '',
+    badge_filter: '',
+  },
   editingIdx: null, // null = adding, number = editing
   pollTimer: null,
 };
+const ORDERS_UI_STATE_KEY = 'amazon-orders.orders-summary.ui-state.v1';
 
 // ─── API helper ───────────────────────────────────────────────────────────────
 async function api(method, path, body) {
@@ -411,7 +684,11 @@ async function api(method, path, body) {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
+  hydrateOrdersUiState();
+  initOrdersDateRange();
+  applyOrdersFiltersToInputs();
   await Promise.all([loadAccounts(), loadSettings(), refreshStatus()]);
+  await loadOrdersSummary();
   startPolling();
 }
 
@@ -419,7 +696,562 @@ async function init() {
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'orders') renderOrdersTable();
   if (name === 'errors') loadSyncErrors();
+}
+
+// ─── Orders summary ─────────────────────────────────────────────────────────
+function initOrdersDateRange() {
+  if (S.ordersDateRange && S.ordersDateRange.startDate && S.ordersDateRange.endDate) {
+    document.getElementById('orders-end-date').value = S.ordersDateRange.endDate;
+    document.getElementById('orders-start-date').value = S.ordersDateRange.startDate;
+    return;
+  }
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 29);
+  document.getElementById('orders-end-date').value = toIsoDate(end);
+  document.getElementById('orders-start-date').value = toIsoDate(start);
+}
+
+function resetOrdersDateRange() {
+  S.ordersDateRange = null;
+  persistOrdersUiState();
+  initOrdersDateRange();
+  loadOrdersSummary();
+}
+
+async function loadOrdersSummary() {
+  const tbody = document.getElementById('orders-tbody');
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Loading…</td></tr>';
+
+  const startDate = document.getElementById('orders-start-date').value;
+  const endDate = document.getElementById('orders-end-date').value;
+  if (!startDate || !endDate) {
+    toast('Please select both start and end dates.', 'error');
+    return;
+  }
+
+  if (startDate > endDate) {
+    toast('Start date cannot be after end date.', 'error');
+    return;
+  }
+
+  S.ordersDateRange = { startDate, endDate };
+  persistOrdersUiState();
+
+  try {
+    const query = `?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`;
+    const data = await api('GET', '/api/orders/summary' + query);
+    S.ordersSummary = data;
+    S.orders = (data.orders || []).map(o => {
+      const items = Array.isArray(o.items) ? o.items : [];
+      const invoice = buildOrderInvoice(o, items);
+      return {
+        ...o,
+        items,
+        invoice_lines: invoice.lines,
+        invoice_text: invoice.searchText,
+        invoice_line_total: invoice.lineItemsTotal,
+        item_count: invoice.itemCount,
+        order_total: invoice.orderTotal,
+        discount_total: invoice.discountTotal,
+        paid_amount: invoice.paidAmount,
+        order_status: invoice.orderStatus,
+        usedReconciliation: invoice.usedReconciliation,
+        reconciliationDelta: invoice.reconciliationDelta,
+      };
+    });
+    renderOrdersStats();
+    renderBadgeQuickFilters();
+    renderOrdersTable();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--error)">Failed to load orders: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderOrdersStats() {
+  const el = document.getElementById('orders-stats');
+  if (!S.ordersSummary) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `
+    <span class="badge badge-info">Date range: ${esc(S.ordersSummary.start_date)} to ${esc(S.ordersSummary.end_date)}</span>
+    <span class="badge badge-success">Orders: ${esc(S.ordersSummary.total_orders)}</span>
+    <span class="badge badge-success">Order items: ${esc(S.ordersSummary.total_item_units)}</span>
+    <span class="badge badge-success">Grand total: ${formatCurrency(S.ordersSummary.total_amount)}</span>
+  `;
+}
+
+function setOrdersSort(key) {
+  if (S.ordersSort.key === key) {
+    S.ordersSort.dir = S.ordersSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    S.ordersSort.key = key;
+    S.ordersSort.dir = 'asc';
+  }
+  persistOrdersUiState();
+  renderOrdersTable();
+}
+
+function setOrdersFilter(key, value) {
+  S.ordersFilters[key] = String(value || '').trim().toLowerCase();
+  persistOrdersUiState();
+  if (key === 'badge_filter') {
+    renderBadgeQuickFilters();
+  }
+  renderOrdersTable();
+}
+
+function renderBadgeQuickFilters() {
+  const host = document.getElementById('badge-quick-filters');
+  if (!host) return;
+
+  const badgeCounts = new Map();
+  (S.orders || []).forEach((o) => {
+    getOrderBadgeKeys(o).forEach((k) => {
+      badgeCounts.set(k, (badgeCounts.get(k) || 0) + 1);
+    });
+  });
+
+  const entries = Array.from(badgeCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  if (!entries.length) {
+    host.innerHTML = '';
+    return;
+  }
+
+  const selected = S.ordersFilters.badge_filter || '';
+  const allActive = selected === '';
+  const buttons = [
+    `<button class="badge-quick-btn ${allActive ? 'active' : ''}" onclick="setOrdersFilter('badge_filter','')">All Badges</button>`,
+    ...entries.map(([key, count]) => {
+      const label = getBadgeLabelFromKey(key);
+      const active = selected === key ? 'active' : '';
+      return `<button class="badge-quick-btn ${active}" onclick="setOrdersFilter('badge_filter','${esc(key)}')">${esc(label)} (${count})</button>`;
+    }),
+  ];
+  host.innerHTML = buttons.join('');
+}
+
+function getBadgeLabelFromKey(key) {
+  if (key.startsWith('status:')) {
+    const s = key.slice('status:'.length);
+    if (s === 'other') {
+      return 'In Process';
+    }
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  if (key === 'recon:adjusted') {
+    return 'Adjusted';
+  }
+  return key;
+}
+
+function getOrderBadgeKeys(order) {
+  const status = order.order_status || deriveOrderStatus(order);
+  const keys = [`status:${status}`];
+  const usedReconciliation = Boolean(order.usedReconciliation);
+  if (status !== 'cancelled' && usedReconciliation) {
+    keys.push('recon:adjusted');
+  }
+  return keys;
+}
+
+function renderOrdersTable() {
+  const tbody = document.getElementById('orders-tbody');
+  const rows = getFilteredSortedOrders();
+
+  updateSortIndicators();
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders matched the current date range and filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(o => {
+    const invoiceHtml = renderInvoiceDetails(o);
+
+    const orderLink = getOrderDetailsUrl(o);
+    const orderNumberHtml = orderLink
+      ? `<a href="${esc(orderLink)}" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none;font-weight:600">${esc(o.order_number || '')}</a>`
+      : esc(o.order_number || '');
+
+    return `
+      <tr>
+        <td>${esc(o.order_placed_date || '')}</td>
+        <td>${esc(o.account_label || o.account_username || '')}</td>
+        <td>${orderNumberHtml}</td>
+        <td>${invoiceHtml}</td>
+        <td>${esc(String(o.item_count || 0))}</td>
+        <td class="amount-col">${formatCurrency(o.order_total)}</td>
+        <td class="amount-col">${formatCurrency(o.discount_total)}</td>
+        <td class="amount-col">${formatCurrency(o.paid_amount)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function exportOrdersCsv() {
+  const rows = getFilteredSortedOrders();
+  if (!rows.length) {
+    toast('No rows to export for the current filters.', 'info');
+    return;
+  }
+
+  const headers = ['Order Date', 'Account', 'Order Number', 'Order Link', 'Order Items', 'Order Total', 'Discounts', 'Paid Amount', 'Invoice Lines'];
+  const lines = [headers.map(csvEscape).join(',')];
+
+  rows.forEach((o) => {
+    const linesText = (o.invoice_lines || [])
+      .map((li) => {
+        if (li.quantity === null || li.unitCost === null) {
+          return `${li.label}: ${Number(li.total || 0).toFixed(2)}`;
+        }
+        return `${li.label} (${li.quantity} x ${Number(li.unitCost || 0).toFixed(2)} = ${Number(li.total || 0).toFixed(2)})`;
+      })
+      .join(' | ');
+    const row = [
+      o.order_placed_date || '',
+      o.account_label || o.account_username || '',
+      o.order_number || '',
+      getOrderDetailsUrl(o) || '',
+      o.item_count || 0,
+      Number(o.order_total || 0).toFixed(2),
+      Number(o.discount_total || 0).toFixed(2),
+      Number(o.paid_amount || 0).toFixed(2),
+      linesText,
+    ];
+    lines.push(row.map(csvEscape).join(','));
+  });
+
+  const csvText = lines.join('\n');
+  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `orders-summary-${toIsoDate(new Date())}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Exported ${rows.length} rows to CSV`, 'success');
+}
+
+function getFilteredSortedOrders() {
+  const f = S.ordersFilters;
+  const filtered = S.orders.filter(o => {
+    if (f.order_placed_date && !String(o.order_placed_date || '').toLowerCase().includes(f.order_placed_date)) return false;
+    if (f.account_label && !String(o.account_label || o.account_username || '').toLowerCase().includes(f.account_label)) return false;
+    if (f.order_number && !String(o.order_number || '').toLowerCase().includes(f.order_number)) return false;
+    if (f.invoice_text && !String(o.invoice_text || '').toLowerCase().includes(f.invoice_text)) return false;
+    if (f.item_count && !String(o.item_count || '').toLowerCase().includes(f.item_count)) return false;
+    if (f.order_total && !String(o.order_total ?? '').toLowerCase().includes(f.order_total)) return false;
+    if (f.discount_total && !String(o.discount_total ?? '').toLowerCase().includes(f.discount_total)) return false;
+    if (f.paid_amount && !String(o.paid_amount ?? '').toLowerCase().includes(f.paid_amount)) return false;
+    if (f.badge_filter) {
+      const keys = getOrderBadgeKeys(o);
+      if (!keys.includes(f.badge_filter)) return false;
+    }
+    return true;
+  });
+
+  const { key, dir } = S.ordersSort;
+  const sign = dir === 'asc' ? 1 : -1;
+  return filtered.slice().sort((a, b) => compareOrders(a, b, key) * sign);
+}
+
+function compareOrders(a, b, key) {
+  if (key === 'paid_amount') {
+    return (a.paid_amount || 0) - (b.paid_amount || 0);
+  }
+  if (key === 'item_count') {
+    return (a.item_count || 0) - (b.item_count || 0);
+  }
+  if (key === 'order_total') {
+    return (a.order_total || 0) - (b.order_total || 0);
+  }
+  if (key === 'discount_total') {
+    return (a.discount_total || 0) - (b.discount_total || 0);
+  }
+  return String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { sensitivity: 'base' });
+}
+
+function buildOrderInvoice(order, items) {
+  const lines = [];
+  let itemCount = 0;
+
+  (items || []).forEach((item) => {
+    const qtyRaw = toNumberOrNull(item.quantity);
+    const quantity = qtyRaw === null || qtyRaw === 0 ? 1 : qtyRaw;
+    const unitCost = toNumberOrZero(item.price);
+    const total = roundMoney(unitCost * quantity);
+    itemCount += quantity;
+    lines.push({
+      label: item.title || 'Unnamed item',
+      quantity,
+      unitCost,
+      total,
+      isDiscount: total < 0,
+    });
+  });
+
+  const shippingTotal = toNumberOrNull(order.shipping_total);
+  const freeShipping = toNumberOrZero(order.free_shipping);
+  const netShipping = shippingTotal === null ? null : roundMoney(shippingTotal + freeShipping);
+
+  addAdjustmentLine(lines, 'Shipping', netShipping);
+  addAdjustmentLine(lines, 'Promotion applied', order.promotion_applied, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Coupon savings', order.coupon_savings, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Subscription discount', order.subscription_discount, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Multi-buy discount', order.multibuy_discount, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Amazon discount', order.amazon_discount, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Reward points', order.reward_points, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Gift card', order.gift_card, { forceDiscount: true });
+  addAdjustmentLine(lines, 'Refund', order.refund_total, { forceDiscount: true });
+
+  const paidAmount = roundMoney(toNumberOrZero(order.grand_total));
+  let lineItemsTotal = roundMoney(lines.reduce((sum, line) => sum + line.total, 0));
+  const delta = roundMoney(paidAmount - lineItemsTotal);
+  const usedReconciliation = Math.abs(delta) >= 0.01;
+
+  if (usedReconciliation) {
+    lines.push({
+      label: 'Reconciliation adjustment',
+      quantity: null,
+      unitCost: null,
+      total: delta,
+      isDiscount: delta < 0,
+    });
+    lineItemsTotal = roundMoney(lineItemsTotal + delta);
+  }
+
+  const orderTotal = roundMoney(lines.filter((line) => line.total > 0).reduce((sum, line) => sum + line.total, 0));
+  const discountTotal = roundMoney(Math.abs(lines.filter((line) => line.total < 0).reduce((sum, line) => sum + line.total, 0)));
+  const searchText = lines.map((line) => line.label).join(' | ');
+  const orderStatus = deriveOrderStatus(order);
+
+  return {
+    lines,
+    searchText,
+    lineItemsTotal,
+    itemCount,
+    orderTotal,
+    discountTotal,
+    paidAmount,
+    orderStatus,
+    usedReconciliation,
+    reconciliationDelta: delta,
+  };
+}
+
+function deriveOrderStatus(order) {
+  if (isCancelledOrder(order)) {
+    return 'cancelled';
+  }
+
+  const shipmentStatuses = Array.isArray(order.shipment_statuses) ? order.shipment_statuses : [];
+  const statusText = shipmentStatuses.join(' ').toLowerCase();
+  if (statusText.includes('cancel')) {
+    return 'cancelled';
+  }
+
+  if (statusText.includes('return')) {
+    return 'return';
+  }
+
+  if (Math.abs(toNumberOrZero(order.refund_total)) >= 0.01) {
+    return 'return';
+  }
+
+  if (statusText.includes('delivered')) {
+    return 'delivered';
+  }
+
+  return 'other';
+}
+
+function isCancelledOrder(order) {
+  const v = order ? order.cancelled : null;
+  if (v === true || v === 1) return true;
+  const s = String(v || '').trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'y';
+}
+
+function getOrderStatusBadgeMeta(status) {
+  if (status === 'cancelled') {
+    return { cls: 'status-cancelled', label: 'Cancelled' };
+  }
+  if (status === 'return') {
+    return { cls: 'status-return', label: 'Return' };
+  }
+  if (status === 'delivered') {
+    return { cls: 'status-delivered', label: 'Delivered' };
+  }
+  return { cls: 'status-other', label: 'In Process' };
+}
+
+function addAdjustmentLine(lines, label, rawAmount, opts = {}) {
+  const n = toNumberOrNull(rawAmount);
+  if (n === null || Math.abs(n) < 0.00001) return;
+
+  let total = n;
+  if (opts.forceDiscount) {
+    total = -Math.abs(n);
+  }
+
+  lines.push({
+    label,
+    quantity: null,
+    unitCost: null,
+    total: roundMoney(total),
+    isDiscount: total < 0,
+  });
+}
+
+function renderInvoiceDetails(order) {
+  const status = order.order_status || deriveOrderStatus(order);
+  const usedReconciliation = Boolean(order.usedReconciliation);
+  const reconciliationDelta = toNumberOrZero(order.reconciliationDelta);
+  const refundAmount = toNumberOrZero(order.refund_total);
+  const showRefundBox = status === 'return' || Math.abs(refundAmount) >= 0.01;
+  const refundBoxClass = refundAmount > 0
+    ? ' refund-positive'
+    : ((status === 'return' || refundAmount === 0) ? ' refund-alert' : '');
+
+  const statusMeta = getOrderStatusBadgeMeta(status);
+  const reconciliationBadge = status === 'cancelled'
+    ? ''
+    : (usedReconciliation
+      ? `<span class="invoice-badge reconcile-adjusted">Adjusted (${formatCurrency(reconciliationDelta)})</span>`
+      : '');
+  const badgesHtml = `
+    <div class="invoice-badges">
+      <span class="invoice-badge ${statusMeta.cls}">${statusMeta.label}</span>
+      ${reconciliationBadge}
+    </div>
+  `;
+
+  const summaryHtml = `
+    ${badgesHtml}
+    <div class="invoice-summary">
+      <div class="box">
+        <span class="lbl">Order total</span>
+        <span class="val">${formatCurrency(order.order_total)}</span>
+      </div>
+      <div class="box">
+        <span class="lbl">Discounts</span>
+        <span class="val">${formatCurrency(order.discount_total)}</span>
+      </div>
+      <div class="box">
+        <span class="lbl">Paid amount</span>
+        <span class="val">${formatCurrency(order.paid_amount)}</span>
+      </div>
+      ${showRefundBox ? `
+      <div class="box${refundBoxClass}">
+        <span class="lbl">Refund amount</span>
+        <span class="val">${formatCurrency(refundAmount)}</span>
+      </div>` : ''}
+    </div>
+  `;
+
+  const lineRows = (order.invoice_lines || []).map((line) => {
+    const hasUnit = line.quantity !== null && line.unitCost !== null;
+    const totalClass = line.total < 0 ? 'total negative' : 'total';
+    return `
+      <tr>
+        <td>${esc(line.label || '')}</td>
+        <td class="qty">${hasUnit ? esc(String(line.quantity)) : '—'}</td>
+        <td class="unit">${hasUnit ? formatCurrency(line.unitCost) : '—'}</td>
+        <td class="${totalClass}">${formatCurrency(line.total)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const totalRow = `
+    <tr class="total-row">
+      <td colspan="3">Line items total</td>
+      <td class="total">${formatCurrency(order.invoice_line_total)}</td>
+    </tr>
+  `;
+
+  return `
+    ${summaryHtml}
+    <table class="invoice-lines">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Qty</th>
+          <th>Unit Cost</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineRows}
+        ${totalRow}
+      </tbody>
+    </table>
+  `;
+}
+
+function updateSortIndicators() {
+  ['order_placed_date', 'account_label', 'order_number', 'invoice_text', 'item_count', 'order_total', 'discount_total', 'paid_amount'].forEach((k) => {
+    const el = document.getElementById('sort-' + k);
+    if (!el) return;
+    if (S.ordersSort.key === k) {
+      el.textContent = S.ordersSort.dir === 'asc' ? ' ▲' : ' ▼';
+    } else {
+      el.textContent = '';
+    }
+  });
+}
+
+function hydrateOrdersUiState() {
+  let raw;
+  try {
+    raw = localStorage.getItem(ORDERS_UI_STATE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved && saved.sort && saved.sort.key && saved.sort.dir) {
+      S.ordersSort = {
+        key: saved.sort.key,
+        dir: saved.sort.dir === 'asc' ? 'asc' : 'desc',
+      };
+    }
+    if (saved && saved.filters && typeof saved.filters === 'object') {
+      S.ordersFilters = {
+        ...S.ordersFilters,
+        ...saved.filters,
+      };
+    }
+    if (saved && saved.dateRange && saved.dateRange.startDate && saved.dateRange.endDate) {
+      S.ordersDateRange = {
+        startDate: saved.dateRange.startDate,
+        endDate: saved.dateRange.endDate,
+      };
+    }
+  } catch (_) {
+    localStorage.removeItem(ORDERS_UI_STATE_KEY);
+  }
+}
+
+function persistOrdersUiState() {
+  const state = {
+    sort: S.ordersSort,
+    filters: S.ordersFilters,
+    dateRange: S.ordersDateRange || {
+      startDate: document.getElementById('orders-start-date').value || '',
+      endDate: document.getElementById('orders-end-date').value || '',
+    },
+  };
+  localStorage.setItem(ORDERS_UI_STATE_KEY, JSON.stringify(state));
+}
+
+function applyOrdersFiltersToInputs() {
+  Object.entries(S.ordersFilters).forEach(([key, value]) => {
+    const el = document.getElementById('filter-' + key);
+    if (el) el.value = value || '';
+  });
 }
 
 // ─── Status polling ───────────────────────────────────────────────────────────
@@ -849,6 +1681,51 @@ function esc(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toIsoDate(dateObj) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getOrderDetailsUrl(order) {
+  if (order.order_details_link) {
+    return order.order_details_link;
+  }
+  if (order.order_number) {
+    return `https://www.amazon.com/gp/your-account/order-details/ref=oh_aui_search?orderId=${encodeURIComponent(order.order_number)}`;
+  }
+  return '';
+}
+
+function csvEscape(value) {
+  const s = String(value ?? '');
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function formatCurrency(value) {
+  const n = Number(value || 0);
+  return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+}
+
+function roundMoney(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function toNumberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toNumberOrZero(value) {
+  const n = toNumberOrNull(value);
+  return n === null ? 0 : n;
 }
 
 function formatOrderJson(raw) {

@@ -79,6 +79,47 @@ def _call_actual_api(payload: dict, config: Optional["ActualBudgetConfig"] = Non
         return {"error": f"invalid JSON: {exc}"}
 
 
+def run_bank_sync(
+    config: "ActualBudgetConfig",
+    db: Optional["Database"] = None,
+    account_id: Optional[int] = None,
+) -> None:
+    """Trigger a bank sync in Actual Budget for the configured Amazon account.
+
+    Logs progress via the module logger. If *db* and *account_id* are provided,
+    any error is also written to the amazon_sync_errors table so it surfaces in
+    the webapp error view.
+    """
+    logger.info(
+        "Starting bank sync for Actual Budget account '%s'", config.account_id
+    )
+    payload = {
+        "action": "runBankSync",
+        "budgetSyncId": config.budget_sync_id,
+        "accountId": config.account_id,
+    }
+    result = _call_actual_api(payload, config)
+    if "error" in result:
+        error_msg = result["error"]
+        logger.error(
+            "Bank sync failed for Actual Budget account '%s': %s",
+            config.account_id,
+            error_msg,
+        )
+        if db is not None and account_id is not None:
+            db.log_amazon_sync_error(
+                account_id=account_id,
+                order_number="bank_sync",
+                error_type="bank_sync_error",
+                message=f"Bank sync failed for Actual Budget account '{config.account_id}': {error_msg}",
+            )
+    else:
+        logger.info(
+            "Bank sync completed successfully for Actual Budget account '%s'",
+            config.account_id,
+        )
+
+
 def _get_transactions_for_account(
     config: ActualBudgetConfig,
     since_date: str,

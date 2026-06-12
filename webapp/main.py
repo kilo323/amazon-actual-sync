@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -500,6 +500,42 @@ async def trigger_account_filter_sync(idx: int, body: SyncFilterIn):
 
     asyncio.create_task(_run())
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Orders summary
+# ---------------------------------------------------------------------------
+
+def _parse_date(value: str, field_name: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid {field_name} '{value}'. Expected YYYY-MM-DD.") from exc
+
+
+@app.get("/api/orders/summary")
+async def get_orders_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    end_dt = _parse_date(end_date, "end_date") if end_date else datetime.utcnow().date()
+    # Inclusive 30-day window by default.
+    start_dt = _parse_date(start_date, "start_date") if start_date else (end_dt - timedelta(days=29))
+
+    if start_dt > end_dt:
+        raise HTTPException(400, "start_date cannot be after end_date")
+
+    db: Database = app.state.db
+    orders = db.get_order_summaries(start_dt.isoformat(), end_dt.isoformat())
+
+    total_amount = sum((o.get("grand_total") or 0.0) for o in orders)
+    total_item_units = sum((o.get("item_count") or 0) for o in orders)
+
+    return {
+        "start_date": start_dt.isoformat(),
+        "end_date": end_dt.isoformat(),
+        "total_orders": len(orders),
+        "total_item_units": total_item_units,
+        "total_amount": round(total_amount, 2),
+        "orders": orders,
+    }
 
 
 # ---------------------------------------------------------------------------

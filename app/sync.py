@@ -246,12 +246,6 @@ def sync_account(
     except AmazonOrdersError as exc:
         logger.error("Failed to fetch transactions for '%s': %s", account.display_name, exc)
 
-    # --- Push to Actual Budget ---
-    if config.actual_budget:
-        actual_budget_module.push_pending_transactions(
-            db, account_id, account.display_name, config.actual_budget
-        )
-
     if not is_filter_sync:
         db.update_last_synced(account_id, sync_started_at)
 
@@ -266,6 +260,12 @@ def sync_actual_budget_only(config: AppConfig, db: Database) -> None:
     if not config.actual_budget:
         logger.warning("Actual Budget is not configured – skipping")
         return
+    # Run bank sync once up-front (uses account_id=1 for error logging) so
+    # credit-card transactions are in Actual before we attempt to match them
+    # against Amazon orders.
+    actual_budget_module.run_bank_sync(
+        config.actual_budget, db=db, account_id=1
+    )
     logger.info("Starting Actual Budget-only sync for %d account(s)", len(config.accounts))
     for account in config.accounts:
         account_id = db.get_or_create_account(account.username, account.label)
@@ -297,7 +297,10 @@ def sync_all_filter(config: AppConfig, db: Database, time_filter: str, auth_fail
 
 
 def sync_all(config: AppConfig, db: Database, auth_failures: Optional[set] = None) -> None:
+    """Sync Amazon orders for all accounts, then run bank sync, then push to Actual Budget."""
     logger.info("Starting sync for %d account(s)", len(config.accounts))
+
+    # Phase 1: Sync all Amazon accounts (orders and transactions, but no Actual Budget yet)
     for account in config.accounts:
         try:
             sync_account(account, db, config, auth_failures=auth_failures)
@@ -305,4 +308,28 @@ def sync_all(config: AppConfig, db: Database, auth_failures: Optional[set] = Non
             logger.exception(
                 "Unexpected error syncing account '%s': %s", account.display_name, exc
             )
-    logger.info("All accounts synced")
+    logger.info("All Amazon accounts synced")
+
+    # Phase 2: Run bank sync once (uses account_id=1 for error logging)
+    if config.actual_budget:
+        actual_budget_module.run_bank_sync(
+            config.actual_budget, db=db, account_id=1
+        )
+
+        # Phase 3: Push pending transactions to Actual Budget for all accounts
+        logger.info("Starting Actual Budget sync for %d account(s)", len(config.accounts))
+        for account in config.accounts:
+            account_id = db.get_or_create_account(account.username, account.label)
+            try:
+                actual_budget_module.push_pending_transactions(
+                    db, account_id, account.display_name, config.actual_budget
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception(
+                    "Unexpected error pushing Actual Budget for '%s': %s",
+                    account.display_name,
+                    exc,
+                )
+        logger.info("Actual Budget sync complete")
+
+    logger.info("Full sync complete")

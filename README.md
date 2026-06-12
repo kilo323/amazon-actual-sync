@@ -14,6 +14,7 @@ This project includes:
 - Sync Amazon transactions.
 - Store data locally in SQLite under the data directory.
 - Optional Actual Budget push:
+   - Runs Actual bank sync once per sync cycle for the configured Actual account.
   - Finds matching Actual transactions.
   - Creates split transactions with item-level detail.
 - Web UI for:
@@ -111,10 +112,21 @@ python -m app.main
 When actual_budget is configured, the sync process can push pending transactions into Actual Budget.
 
 At a high level:
+- Sync all configured Amazon accounts first (orders + Amazon transaction history).
+- Run bank sync once for the configured Actual account (actual_budget.account_id).
 - Pull existing transactions from the configured Actual account.
 - Find matching local Amazon transactions by signed amount and date window.
 - If multiple candidates exist, select the closest candidate deterministically.
 - Build split transactions by item and push updates.
+
+Execution order for a full sync:
+- Phase 1: Amazon sync for all accounts.
+- Phase 2: Single Actual bank sync.
+- Phase 3: Actual matching and split updates for all Amazon accounts.
+
+Bank sync errors:
+- Bank sync progress and failures are logged.
+- If bank sync fails, the error is also written to the amazon_sync_errors table so it is visible in the web UI error view.
 
 Recommended rollout:
 - Start with dry_run = true in settings.
