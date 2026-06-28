@@ -2,7 +2,7 @@ const actual = require('@actual-app/api');
 
 const ACTUAL_SERVER_URL = process.env.ACTUAL_SERVER_URL || 'http://localhost:5006';
 const ACTUAL_SERVER_PASSWORD = process.env.ACTUAL_SERVER_PASSWORD || 'changeme';
-const DATA_DIR = process.env.DATA_DIR || './data';
+const DATA_DIR = process.env.ACTUAL_DATA_DIR || process.env.DATA_DIR || './data';
 
 // Redirect all console output to stderr so library logs don't corrupt the
 // JSON response that Python reads from stdout.

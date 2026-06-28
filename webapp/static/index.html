@@ -618,6 +618,11 @@
         <div class="hint">Only set this for non-.com Amazon sites, e.g. <code>amazon.co.uk</code></div>
       </div>
       <div class="field">
+        <label>Tags (optional)</label>
+        <input id="a-tags" type="text" placeholder="tag1 tag2" />
+        <div class="hint">Space-separated tags to attach to this account.</div>
+      </div>
+      <div class="field">
         <label>TOTP Secret Key (for 2FA) *</label>
         <input id="a-otp" type="password" placeholder="32-character base32 secret" />
         <div class="hint">
@@ -1435,18 +1440,17 @@ function openAccountModal(idx) {
     document.getElementById('a-password').value = '';
     document.getElementById('a-label').value    = a.label   || '';
     document.getElementById('a-domain').value   = a.domain  || '';
+    document.getElementById('a-tags').value     = Array.isArray(a.tags) ? a.tags.join(' ') : '';
     document.getElementById('a-otp').value      = '';
     const clearRow = document.getElementById('a-otp-clear-row');
     clearRow.style.display = a.has_otp ? 'flex' : 'none';
     document.getElementById('a-otp-clear').checked = false;
   } else {
-    ['a-username','a-password','a-label','a-domain','a-otp'].forEach(id =>
+    ['a-username','a-password','a-label','a-domain','a-tags','a-otp'].forEach(id =>
       document.getElementById(id).value = '');
     document.getElementById('a-otp-clear-row').style.display = 'none';
   }
-
   document.getElementById('account-overlay').classList.remove('hidden');
-  setTimeout(() => document.getElementById('a-username').focus(), 50);
 }
 
 function closeAccountModal() {
@@ -1458,6 +1462,7 @@ async function saveAccount() {
   const password = document.getElementById('a-password').value;
   const label    = document.getElementById('a-label').value.trim();
   const domain   = document.getElementById('a-domain').value.trim();
+  const tags     = document.getElementById('a-tags').value.trim();
   const otp      = document.getElementById('a-otp').value.trim();
   const clearOtp = document.getElementById('a-otp-clear').checked;
 
@@ -1465,13 +1470,26 @@ async function saveAccount() {
   if (S.editingIdx === null && !password) { toast('Password is required', 'error'); return; }
 
   try {
+    const tagsArray = tags ? tags.split(/\s+/).filter(Boolean) : [];
     if (S.editingIdx === null) {
-      await api('POST', '/api/accounts', { username, password, label: label||null, domain: domain||null, otp_secret_key: otp||null });
+      await api('POST', '/api/accounts', {
+        username,
+        password,
+        label: label||null,
+        domain: domain||null,
+        tags: tagsArray,
+        otp_secret_key: otp||null,
+      });
       toast('Account added', 'success');
     } else {
       await api('PUT', `/api/accounts/${S.editingIdx}`, {
-        username, password: password||null, label: label||null,
-        domain: domain||null, otp_secret_key: otp||null, clear_otp: clearOtp,
+        username,
+        password: password||null,
+        label: label||null,
+        domain: domain||null,
+        tags: tagsArray,
+        otp_secret_key: otp||null,
+        clear_otp: clearOtp,
       });
       toast('Account updated', 'success');
     }

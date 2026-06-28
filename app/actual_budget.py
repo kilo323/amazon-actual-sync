@@ -17,7 +17,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Optional
 
 from .config import ActualBudgetConfig
 from .database import Database
@@ -408,6 +408,7 @@ def push_pending_transactions(
     account_id: int,
     account_label: str,
     config: ActualBudgetConfig,
+    account_tags: Optional[List[str]] = None,
 ) -> None:
     """
     Start from uncategorized Actual Budget transactions, find the matching
@@ -649,13 +650,18 @@ def push_pending_transactions(
             continue
 
         # --- Live update ---
+        tags = account_tags or []
+        tags_str = " ".join(f"#{tag}" for tag in tags)
+        notes = f"{notes_label} #amazon_sync"
+        if tags_str:
+            notes = f"{tags_str} {notes}"
         new_transaction: dict = {
             "account": actual_tx.get("account"),
             "date": actual_tx.get("date"),
             "amount": parent_cents,
             "payee": actual_tx.get("payee"),
             "imported_payee": actual_tx.get("imported_payee"),
-            "notes": f"{account_label} - {notes_label} #amazon_sync",
+            "notes": notes,
             "cleared": actual_tx.get("cleared"),
         }
         if subs:

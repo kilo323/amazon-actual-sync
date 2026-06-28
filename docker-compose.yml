@@ -15,9 +15,10 @@ services:
       - "${SYNC_WEBAPP_PORT:-8080}:8080"
     environment:
       DATA_DIR: "/data"
+      ACTUAL_DATA_DIR: "/data/actual-data"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       AMAZON_ACCOUNTS: "${AMAZON_ACCOUNTS:-}"
-      ACTUAL_SERVER_URL: "${ACTUAL_SERVER_URL:-http://localhost:5006/}"
+      ACTUAL_SERVER_URL: "http://actual_server:5006/"
       ACTUAL_SERVER_PASSWORD: "${ACTUAL_SERVER_PASSWORD:-changeme}"
     volumes:
       - ./data:/data

@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -141,6 +141,7 @@ class AccountIn(BaseModel):
     otp_secret_key: Optional[str] = None
     label: Optional[str] = None
     domain: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class AccountUpdate(BaseModel):
@@ -150,6 +151,7 @@ class AccountUpdate(BaseModel):
     clear_otp: bool = False
     label: Optional[str] = None
     domain: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 VALID_FILTERS = {"last30", "months-3"}
@@ -287,6 +289,7 @@ async def list_accounts():
             "label": a.label,
             "domain": a.domain,
             "has_otp": bool(a.otp_secret_key),
+            "tags": a.tags,
         }
         for i, a in enumerate(config.accounts)
     ]
@@ -303,6 +306,7 @@ async def add_account(body: AccountIn):
         otp_secret_key=body.otp_secret_key or None,
         label=body.label or None,
         domain=body.domain or None,
+        tags=body.tags or [],
     ))
     config.save()
     return {"index": len(config.accounts) - 1}
@@ -323,6 +327,7 @@ async def update_account(idx: int, body: AccountUpdate):
         ),
         label=body.label or None,
         domain=body.domain or None,
+        tags=body.tags if body.tags is not None else existing.tags,
     )
     config.save()
     return {"ok": True}
@@ -547,13 +552,14 @@ async def get_actual_budget_categories():
     """Return the list of categories from the configured Actual Budget instance."""
     config = AppConfig.load()
     if not config.actual_budget:
-        raise HTTPException(status_code=400, detail="Actual Budget is not configured")
+        return {"categories": []}
     result = actual_budget_module._call_actual_api(
         {"action": "getCategories", "budgetSyncId": config.actual_budget.budget_sync_id},
         config.actual_budget,
     )
     if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
+        logger.warning("Failed to load Actual Budget categories: %s", result["error"])
+        return {"categories": []}
     categories = sorted(
         (c for c in result.get("data", []) if not c.get("is_income") and not c.get("hidden")),
         key=lambda c: (c.get("group_name") or "", c.get("name") or ""),

@@ -271,7 +271,7 @@ def sync_actual_budget_only(config: AppConfig, db: Database) -> None:
         account_id = db.get_or_create_account(account.username, account.label)
         try:
             actual_budget_module.push_pending_transactions(
-                db, account_id, account.display_name, config.actual_budget
+                db, account_id, account.display_name, config.actual_budget, account.tags
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception(
@@ -322,7 +322,7 @@ def sync_all(config: AppConfig, db: Database, auth_failures: Optional[set] = Non
             account_id = db.get_or_create_account(account.username, account.label)
             try:
                 actual_budget_module.push_pending_transactions(
-                    db, account_id, account.display_name, config.actual_budget
+                    db, account_id, account.display_name, config.actual_budget, account.tags
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.exception(

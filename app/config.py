@@ -30,6 +30,7 @@ class AccountConfig:
     otp_secret_key: Optional[str] = None
     label: Optional[str] = None
     domain: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
 
     @property
     def display_name(self) -> str:
@@ -74,6 +75,7 @@ class AppConfig:
                 otp_secret_key=a.get("otp_secret_key").replace(" ", "").strip() if a.get("otp_secret_key") else None,
                 label=a.get("label") or None,
                 domain=a.get("domain") or None,
+                tags=a.get("tags") or [],
             )
             for a in data.get("accounts", [])
         ]
@@ -127,6 +129,7 @@ class AppConfig:
                     "otp_secret_key": a.otp_secret_key,
                     "label": a.label,
                     "domain": a.domain,
+                    "tags": a.tags,
                 }
                 for a in self.accounts
             ],
