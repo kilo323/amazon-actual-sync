@@ -36,6 +36,21 @@ _NODE_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "..", "actual-budget
 # ---------------------------------------------------------------------------
 
 
+def _is_supported_amazon_payee(payee_name: Optional[str]) -> bool:
+    """Return True when an Actual Budget payee could correspond to an Amazon order.
+
+    We intentionally ignore Amazon Pharmacy charges because they are credit-card
+    transactions for pharmacy purchases, not Amazon order items with a matching
+    local order record.
+    """
+    normalized = (payee_name or "").lower().strip()
+    if not normalized or "amazon" not in normalized:
+        return False
+    if "amazon pharmacy" in normalized:
+        return False
+    return True
+
+
 def _call_actual_api(payload: dict, config: Optional["ActualBudgetConfig"] = None) -> dict:
     """Invoke the Node.js Actual Budget API script and return parsed JSON."""
     script_path = os.path.abspath(_NODE_SCRIPT_PATH)
@@ -464,8 +479,8 @@ def push_pending_transactions(
             # No configured category: only include uncategorized transactions
             if tx_category is not None:
                 continue
-        payee_name = (etx.get("payee_name") or etx.get("imported_payee") or "").lower()
-        if "amazon" not in payee_name:
+        payee_name = etx.get("payee_name") or etx.get("imported_payee") or ""
+        if not _is_supported_amazon_payee(payee_name):
             continue
         candidates.append(etx)
 
