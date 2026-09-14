@@ -171,7 +171,7 @@ class SyncFilterIn(BaseModel):
 
 class ActualBudgetIn(BaseModel):
     budget_sync_id: str = ""
-    account_id: str = ""
+    account_ids: List[str] = []
     dry_run: bool = True
     server_url: str = "http://localhost:5006"
     server_password: str = ""
@@ -236,7 +236,7 @@ async def get_settings():
     if config.actual_budget is not None:
         ab = {
             "budget_sync_id": config.actual_budget.budget_sync_id,
-            "account_id": config.actual_budget.account_id,
+            "account_ids": config.actual_budget.account_ids,
             "dry_run": config.actual_budget.dry_run,
             "server_url": config.actual_budget.server_url,
             "server_password": config.actual_budget.server_password,
@@ -261,7 +261,7 @@ async def update_settings(body: SettingsIn):
     if body.actual_budget is not None:
         config.actual_budget = ActualBudgetConfig(
             budget_sync_id=body.actual_budget.budget_sync_id,
-            account_id=body.actual_budget.account_id,
+            account_ids=ActualBudgetConfig._normalize_account_ids(body.actual_budget.account_ids),
             dry_run=body.actual_budget.dry_run,
             server_url=body.actual_budget.server_url,
             server_password=body.actual_budget.server_password,
@@ -546,6 +546,28 @@ async def get_orders_summary(start_date: Optional[str] = None, end_date: Optiona
 # ---------------------------------------------------------------------------
 # Amazon sync errors
 # ---------------------------------------------------------------------------
+
+@app.get("/api/actual-budget/accounts")
+async def get_actual_budget_accounts():
+    """Return the list of accounts from the configured Actual Budget instance."""
+    config = AppConfig.load()
+    if not config.actual_budget or not config.actual_budget.budget_sync_id:
+        return {"accounts": []}
+    result = actual_budget_module._call_actual_api(
+        {"action": "getAccounts", "budgetSyncId": config.actual_budget.budget_sync_id},
+        config.actual_budget,
+    )
+    if "error" in result:
+        logger.warning("Failed to load Actual Budget accounts: %s", result["error"])
+        return {"accounts": []}
+    accounts = sorted(result.get("data", []), key=lambda a: (a.get("name") or "").lower())
+    return {
+        "accounts": [
+            {"id": a["id"], "name": a.get("name", ""), "type": a.get("type", "")}
+            for a in accounts
+        ]
+    }
+
 
 @app.get("/api/actual-budget/categories")
 async def get_actual_budget_categories():

@@ -15,12 +15,26 @@ _CONFIG_PATH: str = os.environ.get("CONFIG_PATH", os.path.join(DATA_DIR, "config
 @dataclass
 class ActualBudgetConfig:
     budget_sync_id: str = ""
-    account_id: str = ""
+    account_ids: List[str] = field(default_factory=list)
     dry_run: bool = True
     server_url: str = "http://localhost:5006"
     server_password: str = ""
     actual_sync_start_date: Optional[str] = None  # ISO date string YYYY-MM-DD
     amazon_category_name: str = ""  # If set, sync only transactions with this category; if empty, sync only uncategorized
+
+    @property
+    def account_id(self) -> str:
+        """Backwards-compatible accessor returning the first configured account."""
+        return self.account_ids[0] if self.account_ids else ""
+
+    @staticmethod
+    def _normalize_account_ids(raw_ids, legacy_single: str = "") -> List[str]:
+        """Coerce account id input (list or legacy single string) into a clean list."""
+        if raw_ids is None:
+            raw_ids = [legacy_single] if legacy_single else []
+        elif isinstance(raw_ids, str):
+            raw_ids = raw_ids.split(",")
+        return [str(a).strip() for a in raw_ids if str(a).strip()]
 
 
 @dataclass
@@ -83,7 +97,9 @@ class AppConfig:
         actual_budget: Optional[ActualBudgetConfig] = (
             ActualBudgetConfig(
                 budget_sync_id=ab.get("budget_sync_id", ""),
-                account_id=ab.get("account_id", ""),
+                account_ids=ActualBudgetConfig._normalize_account_ids(
+                    ab.get("account_ids"), ab.get("account_id", "")
+                ),
                 dry_run=bool(ab.get("dry_run", True)),
                 server_url=ab.get("server_url", "http://localhost:5006"),
                 server_password=ab.get("server_password", ""),
@@ -106,7 +122,7 @@ class AppConfig:
         ab = (
             {
                 "budget_sync_id": self.actual_budget.budget_sync_id,
-                "account_id": self.actual_budget.account_id,
+                "account_ids": self.actual_budget.account_ids,
                 "dry_run": self.actual_budget.dry_run,
                 "server_url": self.actual_budget.server_url,
                 "server_password": self.actual_budget.server_password,

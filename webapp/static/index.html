@@ -498,9 +498,9 @@
           <div class="hint">The sync ID of your Actual Budget file.</div>
         </div>
         <div class="field">
-          <label>Account ID</label>
-          <input id="s-ab-account-id" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          <div class="hint">The Actual Budget account where Amazon charges are posted.</div>
+          <label>Accounts</label>
+          <select id="s-ab-account-ids" multiple size="6" style="width:100%"></select>
+          <div class="hint">Select one or more Actual Budget accounts (e.g. credit cards) where Amazon charges are posted. Hold Ctrl/Cmd to select multiple.</div>
         </div>
         <div class="field">
           <label>Server URL</label>
@@ -1624,6 +1624,48 @@ async function loadActualBudgetCategories(selectedName) {
   }
 }
 
+async function loadActualBudgetAccounts(selectedIds) {
+  const sel = document.getElementById('s-ab-account-ids');
+  selectedIds = selectedIds || [];
+  const renderFallback = () => {
+    // If accounts can't be loaded, show the currently configured IDs as options
+    sel.innerHTML = '';
+    for (const id of selectedIds) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      opt.selected = true;
+      sel.appendChild(opt);
+    }
+  };
+  try {
+    const res = await api('GET', '/api/actual-budget/accounts');
+    const accounts = res.accounts || [];
+    if (!accounts.length) { renderFallback(); return; }
+    sel.innerHTML = '';
+    for (const acct of accounts) {
+      const opt = document.createElement('option');
+      opt.value = acct.id;
+      opt.textContent = acct.name + (acct.type ? ` (${acct.type})` : '');
+      if (selectedIds.includes(acct.id)) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    // Preserve selected IDs that aren't in the fetched list (e.g. closed accounts)
+    const knownIds = accounts.map(a => a.id);
+    for (const id of selectedIds) {
+      if (!knownIds.includes(id)) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+  } catch (e) {
+    renderFallback();
+  }
+}
+
 async function loadSettings() {
   try {
     const s = await api('GET', '/api/settings');
@@ -1634,7 +1676,7 @@ async function loadSettings() {
     document.getElementById('s-db-path').textContent   = s.db_path;
     const ab = s.actual_budget || {};
     document.getElementById('s-ab-budget-sync-id').value   = ab.budget_sync_id   || '';
-    document.getElementById('s-ab-account-id').value       = ab.account_id       || '';
+    await loadActualBudgetAccounts(ab.account_ids || (ab.account_id ? [ab.account_id] : []));
     document.getElementById('s-ab-server-url').value       = ab.server_url       || '';
     document.getElementById('s-ab-server-password').value  = '';
     document.getElementById('s-ab-dry-run').checked        = ab.dry_run !== false;
@@ -1648,16 +1690,17 @@ async function saveSettings(evt) {
   evt.preventDefault();
   try {
     const abSyncId   = document.getElementById('s-ab-budget-sync-id').value.trim();
-    const abAcctId   = document.getElementById('s-ab-account-id').value.trim();
+    const abAcctIds  = Array.from(document.getElementById('s-ab-account-ids').selectedOptions)
+      .map(o => o.value.trim()).filter(Boolean);
     const abServerUrl = document.getElementById('s-ab-server-url').value.trim();
     const abServerPw  = document.getElementById('s-ab-server-password').value;
     const abDryRun   = document.getElementById('s-ab-dry-run').checked;
     // Preserve existing password if the field was left blank
     const existingPw = (S.settings && S.settings.actual_budget && S.settings.actual_budget.server_password) || '';
-    const actualBudget = (abSyncId || abAcctId)
+    const actualBudget = (abSyncId || abAcctIds.length)
       ? {
           budget_sync_id: abSyncId,
-          account_id: abAcctId,
+          account_ids: abAcctIds,
           server_url: abServerUrl || 'http://localhost:5006',
           server_password: abServerPw || existingPw,
           dry_run: abDryRun,

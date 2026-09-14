@@ -113,8 +113,12 @@ When actual_budget is configured, the sync process can push pending transactions
 
 At a high level:
 - Sync all configured Amazon accounts first (orders + Amazon transaction history).
-- Run bank sync once for the configured Actual account (actual_budget.account_id).
-- Pull existing transactions from the configured Actual account.
+- Run bank sync for each configured Actual account (actual_budget.account_ids).
+- Pull existing transactions from every configured Actual account.
+
+Multiple Actual Budget accounts (e.g. several credit cards) can be configured via the
+`account_ids` list; each is searched for matching Amazon transactions. A legacy single
+`account_id` string is still accepted and migrated automatically.
 - Find matching local Amazon transactions by signed amount and date window.
 - If multiple candidates exist, select the closest candidate deterministically.
 - Build split transactions by item and push updates.

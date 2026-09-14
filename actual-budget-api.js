@@ -101,6 +101,12 @@ async function main() {
         break;
       }
 
+      case 'getAccounts': {
+        const accounts = await actual.getAccounts();
+        result = { data: accounts };
+        break;
+      }
+
       case 'getCategories': {
         const categories = await actual.getCategories();
         result = { data: categories };

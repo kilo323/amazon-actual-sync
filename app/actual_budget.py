@@ -99,52 +99,54 @@ def run_bank_sync(
     db: Optional["Database"] = None,
     account_id: Optional[int] = None,
 ) -> None:
-    """Trigger a bank sync in Actual Budget for the configured Amazon account.
+    """Trigger a bank sync in Actual Budget for every configured account.
 
     Logs progress via the module logger. If *db* and *account_id* are provided,
     any error is also written to the amazon_sync_errors table so it surfaces in
     the webapp error view.
     """
-    logger.info(
-        "Starting bank sync for Actual Budget account '%s'", config.account_id
-    )
-    payload = {
-        "action": "runBankSync",
-        "budgetSyncId": config.budget_sync_id,
-        "accountId": config.account_id,
-    }
-    result = _call_actual_api(payload, config)
-    if "error" in result:
-        error_msg = result["error"]
-        logger.error(
-            "Bank sync failed for Actual Budget account '%s': %s",
-            config.account_id,
-            error_msg,
-        )
-        if db is not None and account_id is not None:
-            db.log_amazon_sync_error(
-                account_id=account_id,
-                order_number="bank_sync",
-                error_type="bank_sync_error",
-                message=f"Bank sync failed for Actual Budget account '{config.account_id}': {error_msg}",
-            )
-    else:
+    for actual_account_id in config.account_ids:
         logger.info(
-            "Bank sync completed successfully for Actual Budget account '%s'",
-            config.account_id,
+            "Starting bank sync for Actual Budget account '%s'", actual_account_id
         )
+        payload = {
+            "action": "runBankSync",
+            "budgetSyncId": config.budget_sync_id,
+            "accountId": actual_account_id,
+        }
+        result = _call_actual_api(payload, config)
+        if "error" in result:
+            error_msg = result["error"]
+            logger.error(
+                "Bank sync failed for Actual Budget account '%s': %s",
+                actual_account_id,
+                error_msg,
+            )
+            if db is not None and account_id is not None:
+                db.log_amazon_sync_error(
+                    account_id=account_id,
+                    order_number="bank_sync",
+                    error_type="bank_sync_error",
+                    message=f"Bank sync failed for Actual Budget account '{actual_account_id}': {error_msg}",
+                )
+        else:
+            logger.info(
+                "Bank sync completed successfully for Actual Budget account '%s'",
+                actual_account_id,
+            )
 
 
 def _get_transactions_for_account(
     config: ActualBudgetConfig,
+    actual_account_id: str,
     since_date: str,
     until_date: str,
 ) -> list:
-    """Fetch all transactions from the configured Actual Budget account."""
+    """Fetch all transactions from one Actual Budget account."""
     payload = {
         "action": "getTransactions",
         "budgetSyncId": config.budget_sync_id,
-        "accountId": config.account_id,
+        "accountId": actual_account_id,
         "sinceDate": since_date,
         "untilDate": until_date,
     }
@@ -443,6 +445,10 @@ def push_pending_transactions(
     # Clear previous errors so the table only reflects the current run.
     db.truncate_amazon_sync_errors(account_id)
 
+    if not config.account_ids:
+        logger.warning("No Actual Budget accounts configured – nothing to sync")
+        return
+
     # Determine date range for fetching existing transactions.
     if config.actual_sync_start_date:
         since = config.actual_sync_start_date
@@ -450,8 +456,16 @@ def push_pending_transactions(
         since = (datetime.utcnow() - timedelta(days=90)).strftime("%Y-%m-%d")
     until = datetime.utcnow().strftime("%Y-%m-%d")
 
-    existing_transactions = _get_transactions_for_account(config, since, until)
-    logger.debug("Fetched %d existing transactions from Actual Budget", len(existing_transactions))
+    # Fetch candidate transactions from every configured Actual Budget account,
+    # keeping track of which Actual account each transaction belongs to.
+    existing_transactions: list = []  # list of (actual_account_id, tx) tuples
+    for actual_account_id in config.account_ids:
+        txs = _get_transactions_for_account(config, actual_account_id, since, until)
+        logger.debug(
+            "Fetched %d existing transactions from Actual Budget account '%s'",
+            len(txs), actual_account_id,
+        )
+        existing_transactions.extend((actual_account_id, t) for t in txs)
 
     # Resolve category filter based on config:
     # - non-empty amazon_category_name: match only transactions with that category
@@ -462,8 +476,8 @@ def push_pending_transactions(
 
     # Filter candidates: include non-split Amazon-payee transactions. Skip
     # already-synced (#amazon_sync) but allow #sync_not_found through for re-processing.
-    candidates = []
-    for etx in existing_transactions:
+    candidates = []  # list of (actual_account_id, tx) tuples
+    for actual_account_id, etx in existing_transactions:
         if etx.get("is_parent"):
             continue
         notes = (etx.get("notes") or "").lower()
@@ -482,7 +496,7 @@ def push_pending_transactions(
         payee_name = etx.get("payee_name") or etx.get("imported_payee") or ""
         if not _is_supported_amazon_payee(payee_name):
             continue
-        candidates.append(etx)
+        candidates.append((actual_account_id, etx))
 
     if not candidates:
         logger.debug("No unsynced Amazon transactions in Actual Budget for account_id=%s", account_id)
@@ -500,7 +514,7 @@ def push_pending_transactions(
 
     synced_tx_ids: list = []
 
-    for actual_tx in candidates:
+    for tx_actual_account_id, actual_tx in candidates:
         actual_tx_id = actual_tx["id"]
         actual_amount = actual_tx.get("amount") or 0  # Signed cents (neg=charge, pos=refund)
         actual_date = actual_tx.get("date")
@@ -688,7 +702,7 @@ def push_pending_transactions(
         patch_payload = {
             "action": "createSplit",
             "budgetSyncId": config.budget_sync_id,
-            "accountId": config.account_id,
+            "accountId": tx_actual_account_id,
             "transactionId": actual_tx_id,
             "transaction": new_transaction,
         }

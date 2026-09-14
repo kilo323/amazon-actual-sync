@@ -15,7 +15,10 @@
   ],
   "actual_budget": {
     "budget_sync_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    "account_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "account_ids": [
+      "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+    ],
     "dry_run": true,
     "server_url": "http://localhost:5006",
     "server_password": "your-actual-budget-password",
