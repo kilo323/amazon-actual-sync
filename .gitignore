@@ -20,6 +20,9 @@ data/*
 # raw data dumps
 test_module/
 
+# debug output
+output/
+
 # Local logs
 *.log
 logs/
