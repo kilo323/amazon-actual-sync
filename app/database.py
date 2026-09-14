@@ -560,6 +560,39 @@ class Database:
                 [(ts, tid) for tid in transaction_ids],
             )
 
+    def get_synced_transactions_in_range(self, account_id: int, start_date: str, end_date: str) -> list:
+        """Return rows marked as synced to Actual Budget within a completed_date range.
+
+        Used to reconcile local sync markers against the current state of Actual
+        Budget (tags on the transactions themselves are the source of truth).
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, order_number, seller, completed_date, grand_total,
+                          actual_transaction_id
+                   FROM transactions
+                   WHERE account_id = ?
+                     AND actual_synced_at IS NOT NULL
+                     AND completed_date >= ?
+                     AND completed_date <= ?""",
+                (account_id, start_date, end_date),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def clear_actual_sync_markers(self, transaction_ids: list) -> None:
+        """Reset actual_synced_at / actual_transaction_id so rows become re-matchable.
+
+        Called when the linked Actual Budget transaction was deleted or its
+        #amazon_sync tag was removed, meaning the split no longer exists.
+        """
+        if not transaction_ids:
+            return
+        with self._connect() as conn:
+            conn.executemany(
+                "UPDATE transactions SET actual_synced_at = NULL, actual_transaction_id = NULL WHERE id = ?",
+                [(tid,) for tid in transaction_ids],
+            )
+
     def get_orders_needing_backfill(self, account_id: int) -> list:
         """Return list of (order_number,) for orders missing full details for the given account."""
         with self._connect() as conn:

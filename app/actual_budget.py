@@ -396,6 +396,101 @@ def _auto_match_refund_items(
 
 
 
+def _reconcile_sync_markers(
+    db: Database,
+    account_id: int,
+    config: ActualBudgetConfig,
+    existing_transactions: list,
+    since: str,
+    until: str,
+) -> None:
+    """Make Actual Budget tags the source of truth for what is already synced.
+
+    A local DB row is marked synced (``actual_synced_at``) once its split is
+    pushed to Actual. If the user later deletes that Actual transaction (bank
+    sync re-adds it untagged) or strips its ``#amazon_sync`` tag, the row would
+    otherwise stay locked forever and never re-match.
+
+    Here we pair every locally-synced row in the fetched date window with a live
+    ``#amazon_sync`` split parent of the same amount within ``_DATE_WINDOW_DAYS``.
+    Rows that cannot be paired are stale and get their markers cleared so they
+    become re-matchable in this same run. Pairing is 1:1 (each live synced parent
+    satisfies at most one row) so duplicate identical charges reconcile by count.
+
+    In dry-run mode nothing is mutated; stale rows are only logged.
+    """
+    window = _DATE_WINDOW_DAYS
+
+    # Only reconcile DB rows whose paired Actual parent must fall inside the
+    # fetched window (since..until). A row can be matched to a parent up to
+    # ±window days away, so rows within `window` days of `since` could have
+    # parents that were never fetched — clearing those markers could cause a
+    # duplicate split, so they are conservatively skipped. (`until` is today,
+    # and bank-imported parents are never future-dated, so no trim needed there.)
+    try:
+        range_start = (datetime.strptime(since, "%Y-%m-%d") + timedelta(days=window)).strftime("%Y-%m-%d")
+    except ValueError:
+        range_start = since
+
+    # Live split parents that still carry the #amazon_sync tag.
+    synced_parents: list = []  # list of [amount_cents, date]
+    for _acct, etx in existing_transactions:
+        if not etx.get("is_parent"):
+            continue
+        if "amazon_sync" not in (etx.get("notes") or "").lower():
+            continue
+        raw_date = etx.get("date")
+        if not raw_date:
+            continue
+        try:
+            parent_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        synced_parents.append([etx.get("amount") or 0, parent_date])
+
+    db_rows = db.get_synced_transactions_in_range(account_id, range_start, until)
+    if not db_rows:
+        return
+
+    used = [False] * len(synced_parents)
+    stale_ids: list = []
+    for row in db_rows:
+        amount_cents = int(round((row.get("grand_total") or 0.0) * 100))
+        try:
+            row_date = datetime.strptime(row["completed_date"], "%Y-%m-%d").date()
+        except (ValueError, TypeError, KeyError):
+            continue
+        paired = False
+        for i, (parent_amount, parent_date) in enumerate(synced_parents):
+            if used[i]:
+                continue
+            if abs(parent_amount - amount_cents) <= 1 and abs((parent_date - row_date).days) <= window:
+                used[i] = True
+                paired = True
+                break
+        if not paired:
+            stale_ids.append(row["id"])
+
+    if not stale_ids:
+        return
+
+    if config.dry_run:
+        logger.info(
+            "[DRY RUN] Would clear %d stale Actual sync marker(s) for account_id=%s "
+            "(linked Actual transaction deleted or #amazon_sync tag removed): tx_ids=%s",
+            len(stale_ids), account_id, stale_ids,
+        )
+        return
+
+    db.clear_actual_sync_markers(stale_ids)
+    logger.info(
+        "Cleared %d stale Actual sync marker(s) for account_id=%s "
+        "(linked Actual transaction deleted or #amazon_sync tag removed); "
+        "they will be re-matched this run",
+        len(stale_ids), account_id,
+    )
+
+
 def _log_split(label: str, tx: dict, subs: list, actual_tx: Optional[dict] = None) -> None:
     kind = "REFUND" if tx["is_refund"] else "CHARGE"
     amount_dollars = abs(tx["tx_total"])
@@ -466,6 +561,12 @@ def push_pending_transactions(
             len(txs), actual_account_id,
         )
         existing_transactions.extend((actual_account_id, t) for t in txs)
+
+    # Reconcile local sync markers against Actual Budget tags before matching:
+    # if a previously-split Actual transaction was deleted (and re-imported by
+    # bank sync) or had its #amazon_sync tag removed, unlock the local row so
+    # it can be matched again in this run.
+    _reconcile_sync_markers(db, account_id, config, existing_transactions, since, until)
 
     # Resolve category filter based on config:
     # - non-empty amazon_category_name: match only transactions with that category
