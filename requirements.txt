@@ -1,6 +1,6 @@
 # Wildcard pin for minor version ensures you always get the latest stable patch.
 # See: https://github.com/alexdlaird/amazon-orders#installation
-amazon-orders[browser]==4.3.*
+amazon-orders[browser]==5.2.*
 
 # APScheduler 3.x for cron-based scheduling
 APScheduler>=3.10,<4.0

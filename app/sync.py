@@ -143,7 +143,7 @@ def sync_account(
             account.display_name,
         )
         try:
-            orders = amazon_orders_client.get_order_history(
+            orders = amazon_orders_client.get_orders(
                 time_filter=time_filter,
                 full_details=True,
             )
