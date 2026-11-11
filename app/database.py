@@ -876,17 +876,27 @@ class Database:
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_charge_count_for_order(self, order_number: str, account_id: int) -> int:
-        """Return the number of non-gift-card charge transactions for an order."""
+    def get_charge_transactions_for_order(self, order_number: str, account_id: int) -> list:
+        """Return card-charge transaction ids and absolute amounts in cents."""
         with self._connect() as conn:
-            row = conn.execute(
-                """SELECT COUNT(*) as cnt FROM transactions
+            rows = conn.execute(
+                """SELECT id, grand_total FROM transactions
                    WHERE order_number = ? AND account_id = ?
                    AND is_refund = 0
-                   AND (payment_method IS NULL OR payment_method NOT LIKE '%Gift Card%')""",
+                   AND (payment_method IS NULL OR (
+                       payment_method NOT LIKE '%Gift Card%'
+                       AND payment_method NOT LIKE '%Reward%'
+                   ))
+                   ORDER BY id""",
                 (order_number, account_id),
-            ).fetchone()
-        return row["cnt"] if row else 0
+            ).fetchall()
+        return [
+            {
+                "tx_id": row["id"],
+                "amount_cents": int(round(abs(row["grand_total"] or 0.0) * 100)),
+            }
+            for row in rows
+        ]
 
     def get_shipments_with_items_for_order(self, order_id: int) -> list:
         """Return shipments with their items for shipment-to-charge attribution.

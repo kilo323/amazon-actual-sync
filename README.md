@@ -122,6 +122,9 @@ Multiple Actual Budget accounts (e.g. several credit cards) can be configured vi
 - Find matching local Amazon transactions by signed amount and date window.
 - If multiple candidates exist, select the closest candidate deterministically.
 - Build split transactions by item and push updates.
+- For fully reconciled orders with one card charge per shipment, assign each
+  shipment's items to a distinct charge; rewards and gift-card tender rows are
+  not counted as card charges.
 
 Execution order for a full sync:
 - Phase 1: Amazon sync for all accounts.

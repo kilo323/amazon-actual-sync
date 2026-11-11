@@ -17,6 +17,7 @@ import logging
 import os
 import subprocess
 from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import List, Optional
 
 from .config import ActualBudgetConfig
@@ -240,25 +241,40 @@ def _identify_items_for_charge(
     """
     Determine which items a specific credit card charge covers.
 
-    Strategy:
-    1. If only one non-gift-card charge exists for this order, the charge covers
-       all items (partial payment after gift card is subtracted).
-    2. If multiple charges exist, try to match shipments to this charge by
-       computing each shipment's expected share (items_subtotal / order_subtotal
-       * order_grand_total) and comparing to the charge amount.
-    3. Fallback: return all items (proportional split still works correctly).
+    When the card charges reconcile to the order total and match the shipment
+    count, assign each shipment to one charge as a group. Otherwise, try direct
+    shipment matching; if there is only one charge or no reliable match is
+    possible, retain the existing all-items fallback.
     """
     all_items = db.get_all_items_for_order(order_id)
     if not all_items:
         return []
 
-    # If only one non-gift-card charge for this order, it covers everything
-    charge_count = db.get_charge_count_for_order(order_number, account_id)
+    shipments = db.get_shipments_with_items_for_order(order_id)
+    charges = db.get_charge_transactions_for_order(order_number, account_id)
+    assignment = _assign_shipments_to_charges(
+        charges,
+        shipments,
+        order.get("subtotal") or 0.0,
+        order.get("order_total") or 0.0,
+        all_items,
+    )
+    if assignment is not None:
+        for charge in charges:
+            if charge["tx_id"] == order.get("tx_id"):
+                logger.debug(
+                    "Assigned charge transaction %s to shipment item(s) for order %s",
+                    charge["tx_id"],
+                    order_number,
+                )
+                return assignment[charge["tx_id"]]
+
+    # If only one non-gift-card, non-rewards charge exists, it covers everything.
+    charge_count = len(charges)
     if charge_count <= 1:
         return all_items
 
     # Multiple charges for same order — try shipment-based attribution
-    shipments = db.get_shipments_with_items_for_order(order_id)
     if not shipments:
         return all_items
 
@@ -318,6 +334,81 @@ def _identify_items_for_charge(
         charge_abs / 100, order_number,
     )
     return all_items
+
+
+def _assign_shipments_to_charges(
+    charges: list,
+    shipments: list,
+    order_subtotal: float,
+    order_total: float,
+    all_items: list,
+) -> Optional[dict]:
+    """Assign each shipment once when its charges reconcile to the order total."""
+    count = len(charges)
+    if not count or count != len(shipments) or count > 16:
+        return None
+    if not order_subtotal or not order_total:
+        return None
+
+    shipment_item_ids = [
+        [item["id"] for item in shipment["items"]]
+        for shipment in shipments
+    ]
+    flattened_ids = [item_id for group in shipment_item_ids for item_id in group]
+    if (
+        any(not group for group in shipment_item_ids)
+        or len(flattened_ids) != len(set(flattened_ids))
+        or set(flattened_ids) != {item["id"] for item in all_items}
+    ):
+        return None
+
+    order_total_cents = int(round(abs(order_total) * 100))
+    if abs(sum(charge["amount_cents"] for charge in charges) - order_total_cents) > 1:
+        return None
+
+    expected_amounts = [
+        round(
+            sum(
+                (item.get("price") or 0.0) * (item.get("quantity") or 1)
+                for item in shipment["items"]
+            )
+            / order_subtotal
+            * order_total_cents
+        )
+        for shipment in shipments
+    ]
+
+    @lru_cache(maxsize=None)
+    def best_assignment(
+        charge_index: int, used_shipments: int
+    ) -> tuple[int, tuple[int, ...]]:
+        if charge_index == count:
+            return 0, ()
+
+        best: Optional[tuple[int, tuple[int, ...]]] = None
+        for shipment_index, expected_amount in enumerate(expected_amounts):
+            bit = 1 << shipment_index
+            if used_shipments & bit:
+                continue
+            remaining_cost, remaining_assignment = best_assignment(
+                charge_index + 1, used_shipments | bit
+            )
+            candidate = (
+                abs(charges[charge_index]["amount_cents"] - expected_amount)
+                + remaining_cost,
+                (shipment_index,) + remaining_assignment,
+            )
+            if best is None or candidate < best:
+                best = candidate
+        if best is None:
+            raise RuntimeError("No complete shipment assignment found")
+        return best
+
+    _, shipment_indices = best_assignment(0, 0)
+    return {
+        charge["tx_id"]: shipments[shipment_index]["items"]
+        for charge, shipment_index in zip(charges, shipment_indices)
+    }
 
 
 # Tolerance (fraction of refund amount) for auto-matching a refund to items.
@@ -412,10 +503,10 @@ def _reconcile_sync_markers(
     otherwise stay locked forever and never re-match.
 
     Here we pair every locally-synced row in the fetched date window with a live
-    ``#amazon_sync`` split parent of the same amount within ``_DATE_WINDOW_DAYS``.
-    Rows that cannot be paired are stale and get their markers cleared so they
-    become re-matchable in this same run. Pairing is 1:1 (each live synced parent
-    satisfies at most one row) so duplicate identical charges reconcile by count.
+    ``#amazon_sync`` split parent of the same amount and order number within
+    ``_DATE_WINDOW_DAYS``. Rows that cannot be paired are stale and get their
+    markers cleared so they become re-matchable in this same run. Pairing is 1:1
+    so duplicate identical charges reconcile by count.
 
     In dry-run mode nothing is mutated; stale rows are only logged.
     """
@@ -433,7 +524,7 @@ def _reconcile_sync_markers(
         range_start = since
 
     # Live split parents that still carry the #amazon_sync tag.
-    synced_parents: list = []  # list of [amount_cents, date]
+    synced_parents: list = []  # list of [amount_cents, date, notes]
     for _acct, etx in existing_transactions:
         if not etx.get("is_parent"):
             continue
@@ -446,7 +537,9 @@ def _reconcile_sync_markers(
             parent_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
         except ValueError:
             continue
-        synced_parents.append([etx.get("amount") or 0, parent_date])
+        synced_parents.append(
+            [etx.get("amount") or 0, parent_date, etx.get("notes") or ""]
+        )
 
     db_rows = db.get_synced_transactions_in_range(account_id, range_start, until)
     if not db_rows:
@@ -461,10 +554,20 @@ def _reconcile_sync_markers(
         except (ValueError, TypeError, KeyError):
             continue
         paired = False
-        for i, (parent_amount, parent_date) in enumerate(synced_parents):
+        order_number = row.get("order_number") or ""
+        for i, (parent_amount, parent_date, parent_notes) in enumerate(synced_parents):
             if used[i]:
                 continue
-            if abs(parent_amount - amount_cents) <= 1 and abs((parent_date - row_date).days) <= window:
+            order_matches = (
+                order_number in parent_notes.split()
+                if order_number
+                else True
+            )
+            if (
+                order_matches
+                and abs(parent_amount - amount_cents) <= 1
+                and abs((parent_date - row_date).days) <= window
+            ):
                 used[i] = True
                 paired = True
                 break
